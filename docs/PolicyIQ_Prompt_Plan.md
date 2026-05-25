@@ -45,7 +45,7 @@ ollama pull llama3.2
 
 ---
 
-### 1.2 — Django Models
+### 1.2 — Django Models COMPLETED
 
 > "Create the `Document` and `Chunk` Django models in `documents/models.py` for PolicyIQ.
 >
