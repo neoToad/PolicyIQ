@@ -1,8 +1,10 @@
 from unittest import mock
 
 import fitz
+from django.contrib import admin
 from django.test import SimpleTestCase
 
+from documents.models import Chunk, Document
 from documents.services.extractor import extract_pages
 
 
@@ -42,3 +44,11 @@ class ExtractPagesTests(SimpleTestCase):
 
         with self.assertRaises(ValueError):
             extract_pages("corrupted.pdf")
+
+
+class AdminRegistrationTests(SimpleTestCase):
+    def test_document_models_are_registered_in_admin(self):
+        import documents.admin  # noqa: F401
+
+        self.assertIn(Document, admin.site._registry)
+        self.assertIn(Chunk, admin.site._registry)
