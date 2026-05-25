@@ -68,7 +68,7 @@ ollama pull llama3.2
 
 ---
 
-### 1.3 — PDF Raw Extraction
+### 1.3 — PDF Raw Extraction COMPLETED
 
 > "Build the raw extraction portion of `documents/services/extractor.py` for PolicyIQ.
 >
@@ -82,7 +82,7 @@ ollama pull llama3.2
 
 ---
 
-### 1.4 — PDF Text Cleanup
+### 1.4 — PDF Text Cleanup COMPLETED
 
 > "Build the cleanup portion of `documents/services/extractor.py` for PolicyIQ. I already have `extract_pages()` working — now add a `clean_pages(pages: list[dict]) -> list[dict]` function that takes the raw output and:
 > - Strips repeated header and footer lines (lines that appear on 3 or more pages verbatim)
@@ -94,8 +94,7 @@ ollama pull llama3.2
 
 ---
 
-### 1.5 — Chunker
-
+### 1.5 — Chunker COMPLETED
 > "Build `documents/services/chunker.py` for PolicyIQ.
 >
 > Write a function `chunk_pages(pages: list[dict], chunk_size: int = 500, overlap: int = 50) -> list[dict]` that:

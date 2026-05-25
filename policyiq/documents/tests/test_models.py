@@ -5,7 +5,7 @@ from django.contrib import admin
 from django.test import SimpleTestCase
 
 from documents.models import Chunk, Document
-from documents.services.extractor import extract_pages
+from documents.services.extractor import clean_pages, extract_pages
 
 
 class ExtractPagesTests(SimpleTestCase):
@@ -44,6 +44,70 @@ class ExtractPagesTests(SimpleTestCase):
 
         with self.assertRaises(ValueError):
             extract_pages("corrupted.pdf")
+
+
+class CleanPagesTests(SimpleTestCase):
+    def test_clean_pages_removes_repeated_headers_and_footers(self):
+        pages = [
+            {
+                "page_number": 1,
+                "raw_text": "Policy Manual\nUnique A\nConfidential Footer",
+            },
+            {
+                "page_number": 2,
+                "raw_text": "Policy Manual\nUnique B\nConfidential Footer",
+            },
+            {
+                "page_number": 3,
+                "raw_text": "Policy Manual\nUnique C\nConfidential Footer",
+            },
+        ]
+
+        result = clean_pages(pages)
+
+        self.assertEqual(result[0]["cleaned_text"], "Unique A")
+        self.assertEqual(result[1]["cleaned_text"], "Unique B")
+        self.assertEqual(result[2]["cleaned_text"], "Unique C")
+
+    def test_clean_pages_removes_page_number_artifacts(self):
+        pages = [
+            {
+                "page_number": 1,
+                "raw_text": "Page 1 of 3\nCoverage details\n1",
+            },
+            {
+                "page_number": 2,
+                "raw_text": "Page 2 of 3\nMore policy text\n2",
+            },
+        ]
+
+        result = clean_pages(pages)
+
+        self.assertEqual(result[0]["cleaned_text"], "Coverage details")
+        self.assertEqual(result[1]["cleaned_text"], "More policy text")
+
+    def test_clean_pages_rejoins_mid_sentence_line_breaks(self):
+        pages = [
+            {
+                "page_number": 1,
+                "raw_text": "Coverage is provided when patient meets\nall clinical criteria.\nStandalone line.",
+            }
+        ]
+
+        result = clean_pages(pages)
+
+        self.assertEqual(
+            result[0]["cleaned_text"],
+            "Coverage is provided when patient meets all clinical criteria.\nStandalone line.",
+        )
+
+    def test_clean_pages_adds_cleaned_text_and_preserves_raw_text(self):
+        pages = [{"page_number": 1, "raw_text": "  Policy text here  \n"}]
+
+        result = clean_pages(pages)
+
+        self.assertEqual(result[0]["raw_text"], "  Policy text here  \n")
+        self.assertEqual(result[0]["cleaned_text"], "Policy text here")
 
 
 class AdminRegistrationTests(SimpleTestCase):

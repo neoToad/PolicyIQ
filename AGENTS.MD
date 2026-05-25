@@ -1,5 +1,5 @@
 # Agent Instructions
-## Workflow: Test-Driven Development
+## Workflow: Test-Driven Development (New Features)
 1. Write failing tests first
 2. Confirm they fail for the right reasons
 3. Write minimum code to make them pass
@@ -18,7 +18,7 @@ Types: `feat` `fix` `test` `refactor` `chore` `docs`
 ---
 
 ## Rules
-- Never write implementation before tests
+- For new features, never write implementation before tests
 - Django: split tests into `test_models.py`, `test_views.py`, `test_serializers.py`
 - Frontend: Vitest + React Testing Library
 - No commit message if tests are failing
