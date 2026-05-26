@@ -109,7 +109,7 @@ ollama pull llama3.2
 
 ---
 
-### 1.6 — Embedder
+### 1.6 — Embedder COMPLETED
 
 > "Build `documents/services/embedder.py` for PolicyIQ.
 >
