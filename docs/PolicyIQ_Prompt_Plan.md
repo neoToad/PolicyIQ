@@ -125,7 +125,7 @@ ollama pull llama3.2
 
 ---
 
-### 1.7 — ChromaDB Indexer
+### 1.7 — ChromaDB Indexer COMPLETED
 
 > "Build `documents/services/indexer.py` for PolicyIQ.
 >
