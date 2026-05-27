@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from documents.models import Document
+from documents.models import Chunk, Document
 from documents.services.chunker import chunk_pages
 from documents.services.embedder import embed_chunks
 from documents.services.extractor import clean_pages, extract_pages
@@ -41,6 +41,17 @@ class DocumentUploadAPIView(APIView):
                 file_path=str(file_path),
                 page_count=len(pages),
                 chunk_count=len(embedded_chunks),
+            )
+            Chunk.objects.bulk_create(
+                [
+                    Chunk(
+                        document=document,
+                        page_number=chunk["page_number"],
+                        token_offset=chunk["token_offset"],
+                        text=chunk["text"],
+                    )
+                    for chunk in embedded_chunks
+                ]
             )
             index_document(str(document.id), embedded_chunks)
 

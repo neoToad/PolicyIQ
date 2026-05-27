@@ -1,9 +1,14 @@
+from pathlib import Path
+
 import chromadb
 from django.conf import settings
 
 
 def get_collection(collection_name: str = "policyiq"):
-    client = chromadb.PersistentClient(path=settings.CHROMA_PERSIST_DIR)
+    persist_dir = getattr(settings, "CHROMA_PERSIST_DIR", None)
+    if not persist_dir:
+        persist_dir = str(Path(settings.BASE_DIR) / "chroma")
+    client = chromadb.PersistentClient(path=persist_dir)
     return client.get_or_create_collection(name=collection_name)
 
 

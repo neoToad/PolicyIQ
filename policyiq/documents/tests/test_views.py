@@ -7,6 +7,7 @@ from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
+from documents.models import Document
 from documents.views import DocumentUploadAPIView
 
 
@@ -16,6 +17,7 @@ class DocumentUploadAPITests(SimpleTestCase):
         self.view = DocumentUploadAPIView.as_view()
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.views.Chunk.objects.bulk_create")
     @mock.patch("documents.views.Document.objects.create")
     @mock.patch("documents.views.index_document")
     @mock.patch("documents.views.embed_chunks")
@@ -30,6 +32,7 @@ class DocumentUploadAPITests(SimpleTestCase):
         mock_embed_chunks,
         mock_index_document,
         mock_create_document,
+        mock_bulk_create_chunks,
     ):
         mock_extract_pages.return_value = [
             {"page_number": 1, "raw_text": "raw one"},
@@ -59,11 +62,13 @@ class DocumentUploadAPITests(SimpleTestCase):
         ]
         mock_embed_chunks.return_value = embedded_chunks
         mock_index_document.return_value = 2
-        fake_document = mock.Mock()
-        fake_document.id = uuid4()
-        fake_document.name = "policy.pdf"
-        fake_document.page_count = 2
-        fake_document.chunk_count = 2
+        fake_document = Document(
+            id=uuid4(),
+            name="policy.pdf",
+            file_path="C:\\fake\\policy.pdf",
+            page_count=2,
+            chunk_count=2,
+        )
         mock_create_document.return_value = fake_document
 
         upload = SimpleUploadedFile(
@@ -88,6 +93,17 @@ class DocumentUploadAPITests(SimpleTestCase):
         mock_chunk_pages.assert_called_once_with(mock_clean_pages.return_value)
         mock_embed_chunks.assert_called_once_with(mock_chunk_pages.return_value)
         mock_index_document.assert_called_once_with(str(fake_document.id), embedded_chunks)
+        mock_bulk_create_chunks.assert_called_once()
+
+        created_chunks = mock_bulk_create_chunks.call_args.args[0]
+        self.assertEqual(len(created_chunks), 2)
+        self.assertEqual(created_chunks[0].document, fake_document)
+        self.assertEqual(created_chunks[0].page_number, 1)
+        self.assertEqual(created_chunks[0].token_offset, 0)
+        self.assertEqual(created_chunks[0].text, "chunk one")
+        self.assertEqual(created_chunks[1].page_number, 2)
+        self.assertEqual(created_chunks[1].token_offset, 500)
+        self.assertEqual(created_chunks[1].text, "chunk two")
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.views.extract_pages")

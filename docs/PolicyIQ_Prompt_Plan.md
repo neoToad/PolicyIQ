@@ -141,7 +141,7 @@ ollama pull llama3.2
 
 ---
 
-### 1.8 — Ingestion View
+### 1.8 — Ingestion View COMPLETED
 
 > "Build the Django upload view in `documents/views.py` for PolicyIQ. This view wires together the full ingestion pipeline.
 >
@@ -157,7 +157,7 @@ ollama pull llama3.2
 
 ---
 
-### 1.9 — Ingestion Smoke Test
+### 1.9 — Ingestion Smoke Test COMPLETED
 
 > "Write a standalone Python script `test_ingestion.py` (not a Django test — just a script I can run directly) that:
 > - Points at a local PDF file path I can configure at the top
