@@ -1,12 +1,12 @@
 # Current Task
 
-**Step 3.2 — Upload Form**
+**Step 3.3 — Upload History**
 
-Building the HTMX upload form and updating the upload view for PolicyIQ.
+Building the upload history view for PolicyIQ.
 
-- Rewriting `templates/documents/upload.html` with HTMX file upload form
-- Adding `templates/documents/_upload_result.html` partial for success/error feedback
-- Updating `UploadPageView` to handle POST and return HTML partials
-- Refactoring ingestion pipeline into `_save_upload_and_ingest()` shared by page view and API view
+- Updating `HistoryPageView` to fetch all documents and render `templates/documents/history.html`
+- Adding `DocumentDeleteView` to remove documents from PostgreSQL and ChromaDB
+- Wiring delete URL at `/documents/<uuid>/delete/`
+- Table with HTMX delete buttons that remove the row on success
 
-Next: 3.3 — Upload History.
+Next: 3.4 — Question Input.

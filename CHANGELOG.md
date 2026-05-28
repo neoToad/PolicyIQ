@@ -67,4 +67,11 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Updated `UploadPageView` to handle POST and return HTML partials instead of JSON
 - Refactored ingestion pipeline into `_save_upload_and_ingest()` shared by page view and API view
 
+### [Phase3.3] Upload history
+- Updated `HistoryPageView` to fetch all documents ordered by upload date
+- Added `DocumentDeleteView` that removes a document from PostgreSQL and ChromaDB
+- Wired delete URL at `/documents/<uuid>/delete/`
+- Rewrote `templates/documents/history.html` with a table and HTMX delete buttons
+- Delete buttons use `hx-confirm`, `hx-target` on the row, and `outerHTML` swap for smooth removal
+
 

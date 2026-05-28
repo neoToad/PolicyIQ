@@ -4,5 +4,42 @@
 
 {% block content %}
   <h1>Upload History</h1>
-  <p class="text-secondary">History table coming in step 3.3.</p>
+
+  {% if documents %}
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Pages</th>
+            <th>Chunks</th>
+            <th>Uploaded</th>
+            <th style="width: 80px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for document in documents %}
+            <tr id="doc-row-{{ document.id }}">
+              <td>{{ document.name }}</td>
+              <td>{{ document.page_count }}</td>
+              <td>{{ document.chunk_count }}</td>
+              <td>{{ document.uploaded_at|date:"Y-m-d H:i" }}</td>
+              <td>
+                <button
+                  class="btn"
+                  style="background: #b91c1c;"
+                  hx-delete="{% url 'document-delete' document.id %}"
+                  hx-target="#doc-row-{{ document.id }}"
+                  hx-swap="outerHTML swap:0.3s"
+                  hx-confirm="Delete this document?"
+                >Delete</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="text-secondary">No documents uploaded yet.</p>
+  {% endif %}
 {% endblock %}

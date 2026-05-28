@@ -12,7 +12,7 @@ from documents.models import Chunk, Document
 from documents.services.chunker import chunk_pages
 from documents.services.embedder import embed_chunks
 from documents.services.extractor import clean_pages, extract_pages
-from documents.services.indexer import index_document
+from documents.services.indexer import delete_document, index_document
 
 
 def _save_upload_and_ingest(upload) -> Document:
@@ -85,7 +85,20 @@ class UploadPageView(View):
 
 class HistoryPageView(View):
     def get(self, request):
-        return render(request, "documents/history.html")
+        documents = Document.objects.order_by("-uploaded_at")
+        return render(request, "documents/history.html", {"documents": documents})
+
+
+class DocumentDeleteView(View):
+    def delete(self, request, pk):
+        try:
+            document = Document.objects.get(pk=pk)
+        except Document.DoesNotExist:
+            return HttpResponse(status=404)
+
+        delete_document(str(document.id))
+        document.delete()
+        return HttpResponse(status=200)
 
 
 class DocumentUploadAPIView(APIView):
