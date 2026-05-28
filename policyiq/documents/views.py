@@ -57,30 +57,30 @@ class UploadPageView(View):
         return render(request, "documents/upload.html")
 
     def post(self, request):
-        upload = request.FILES.get("file")
-        if upload is None:
+        uploads = request.FILES.getlist("file")
+        if not uploads:
             return render(
                 request,
                 "documents/_upload_result.html",
-                {"error": "A PDF file is required."},
+                {"error": "At least one PDF file is required."},
                 status=400,
             )
 
-        try:
-            document = _save_upload_and_ingest(upload)
-            return render(
-                request,
-                "documents/_upload_result.html",
-                {"document": document},
-                status=201,
-            )
-        except Exception as exc:
-            return render(
-                request,
-                "documents/_upload_result.html",
-                {"error": f"Document ingestion failed: {exc}"},
-                status=500,
-            )
+        results = []
+        for upload in uploads:
+            try:
+                document = _save_upload_and_ingest(upload)
+                results.append({"success": True, "document": document})
+            except Exception as exc:
+                results.append({"success": False, "name": upload.name, "error": str(exc)})
+
+        status_code = 201 if any(r["success"] for r in results) else 500
+        return render(
+            request,
+            "documents/_upload_result.html",
+            {"results": results},
+            status=status_code,
+        )
 
 
 class HistoryPageView(View):
@@ -103,31 +103,28 @@ class DocumentDeleteView(View):
 
 class DocumentUploadAPIView(APIView):
     def post(self, request):
-        upload = request.FILES.get("file")
-        if upload is None:
+        uploads = request.FILES.getlist("file")
+        if not uploads:
             return Response(
-                {"error": {"message": "A PDF file is required."}},
+                {"error": {"message": "At least one PDF file is required."}},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            document = _save_upload_and_ingest(upload)
-            return Response(
-                {
-                    "document_id": str(document.id),
-                    "name": document.name,
-                    "page_count": document.page_count,
-                    "chunk_count": document.chunk_count,
-                },
-                status=status.HTTP_201_CREATED,
-            )
-        except Exception as exc:
-            return Response(
-                {
-                    "error": {
-                        "message": "Document ingestion failed.",
-                        "detail": str(exc),
+        results = []
+        for upload in uploads:
+            try:
+                document = _save_upload_and_ingest(upload)
+                results.append(
+                    {
+                        "success": True,
+                        "document_id": str(document.id),
+                        "name": document.name,
+                        "page_count": document.page_count,
+                        "chunk_count": document.chunk_count,
                     }
-                },
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+                )
+            except Exception as exc:
+                results.append({"success": False, "name": upload.name, "error": str(exc)})
+
+        status_code = status.HTTP_201_CREATED if any(r["success"] for r in results) else status.HTTP_500_INTERNAL_SERVER_ERROR
+        return Response({"results": results}, status=status_code)

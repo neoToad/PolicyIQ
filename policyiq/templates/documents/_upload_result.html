@@ -1,10 +1,19 @@
 <div class="card">
-  {% if document %}
+  {% if error %}
+    <p style="color: #b91c1c;"><strong>Error:</strong> {{ error }}</p>
+  {% elif results %}
+    <h3>Upload Results</h3>
+    {% for result in results %}
+      {% if result.success %}
+        <p><strong>{{ result.document.name }}</strong> — {{ result.document.page_count }} pages, {{ result.document.chunk_count }} chunks <span style="color: #15803d;">(OK)</span></p>
+      {% else %}
+        <p><strong>{{ result.name }}</strong> <span style="color: #b91c1c;">(failed: {{ result.error }})</span></p>
+      {% endif %}
+    {% endfor %}
+  {% elif document %}
     <h3>Upload Successful</h3>
     <p><strong>Name:</strong> {{ document.name }}</p>
     <p><strong>Pages:</strong> {{ document.page_count }}</p>
     <p><strong>Chunks:</strong> {{ document.chunk_count }}</p>
-  {% elif error %}
-    <p class="text-secondary" style="color: #b91c1c;"><strong>Error:</strong> {{ error }}</p>
   {% endif %}
 </div>

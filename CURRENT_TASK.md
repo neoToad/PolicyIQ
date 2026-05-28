@@ -1,12 +1,13 @@
 # Current Task
 
-**Step 3.5 — Citations Panel**
+**Step 4.1 — Multi-Document Upload**
 
-Adding the citations panel to PolicyIQ's query page.
+Updating the upload view and form to support multiple PDFs at once.
 
-- Added `#citations` div below `#answer` in `templates/queries/ask.html`
-- JavaScript listens to `htmx:afterRequest`, reads `X-Citations` header, and renders a sources card
-- Each citation shows document name, page number, similarity score as a percentage, and a 150-char preview
-- Panel is hidden when no citations are present
+- Added `multiple` attribute to the file input in `templates/documents/upload.html`
+- Updated `UploadPageView.post()` to process `request.FILES.getlist("file")` sequentially
+- Each file is ingested independently; failures are captured per file without stopping the batch
+- Updated `_upload_result.html` to display a summary of all results with per-file status
+- Also updated `DocumentUploadAPIView` to support multiple files for API parity
 
-Next: Phase 4 — Polish (4.1 Multi-Document Upload).
+Next: 4.2 — Similarity Score Indicator.
