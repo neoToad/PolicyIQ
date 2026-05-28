@@ -21,3 +21,9 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Built queries/services/retriever.py with etrieve_chunks()
 - Added unit tests in queries/tests/test_services.py
 - Fetches query embedding, queries ChromaDB, optionally filters by document, returns scored/ordered results
+
+### [Phase2.2] Prompt builder
+- Built uild_prompt() in queries/services/generator.py
+- Added threshold-based guard that returns None when no chunk is relevant enough
+- Constructed grounded prompt with document name, page number, and chunk text per citation
+- Added retriever refactor to enrich chunks with document_name from PostgreSQL

@@ -1,13 +1,13 @@
 ﻿# Current Task
 
-**Step 2.2 — Prompt Builder**
+**Step 2.3 — Generator**
 
 Building queries/services/generator.py for PolicyIQ.
 
-- Implementing uild_prompt(question, chunks, similarity_threshold) that:
-  - Checks if highest similarity score clears the threshold
-  - Returns None if no chunk is relevant enough
-  - Builds a grounded prompt string with document name + page number per chunk
-  - Instructs the LLM to answer only from provided context
+- Adding generate_response(prompt: str) generator function that:
+  - Calls Ollama generate API at http://localhost:11434/api/generate with llama3.2
+  - Streams response line by line via equests with stream=True
+  - Parses each JSON line and yields the esponse field
+  - Raises a clear exception if Ollama is unreachable
 
-Next: 2.3 — Generator.
+Next: 2.4 — Query View.
