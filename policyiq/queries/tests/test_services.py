@@ -40,8 +40,8 @@ class RetrieveChunksTests(SimpleTestCase):
         self.assertEqual(result[0]["page_number"], 1)
         self.assertEqual(result[0]["document_id"], "doc-1")
         self.assertEqual(result[0]["document_name"], "Test Policy.pdf")
-        self.assertEqual(result[0]["similarity_score"], 0.8)
-        self.assertEqual(result[1]["similarity_score"], 0.5)
+        self.assertEqual(result[0]["similarity_score"], 0.9)
+        self.assertEqual(result[1]["similarity_score"], 0.75)
         mock_collection.query.assert_called_once_with(
             query_embeddings=[[0.1, 0.2, 0.3]], n_results=5, where=None
         )

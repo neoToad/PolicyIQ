@@ -172,7 +172,7 @@ ollama pull llama3.2
 
 ## Phase 2 — Query Interface
 
-### 2.1 — Retriever
+### 2.1 — Retriever COMPLETED
 
 > "Build `queries/services/retriever.py` for PolicyIQ.
 >
@@ -187,7 +187,7 @@ ollama pull llama3.2
 
 ---
 
-### 2.2 — Prompt Builder
+### 2.2 — Prompt Builder COMPLETED
 
 > "Build a `build_prompt(question: str, chunks: list[dict], similarity_threshold: float = 0.5) -> str | None` function in `queries/services/generator.py` for PolicyIQ.
 >
@@ -204,7 +204,7 @@ ollama pull llama3.2
 
 ---
 
-### 2.3 — Generator
+### 2.3 — Generator COMPLETED
 
 > "Add a `generate_response(prompt: str)` generator function to `queries/services/generator.py` for PolicyIQ.
 >
@@ -219,7 +219,7 @@ ollama pull llama3.2
 
 ---
 
-### 2.4 — Query View
+### 2.4 — Query View COMPLETED
 
 > "Build the query view in `queries/views.py` for PolicyIQ.
 >
@@ -234,7 +234,7 @@ ollama pull llama3.2
 
 ---
 
-### 2.5 — Query Smoke Test
+### 2.5 — Query Smoke Test COMPLETED
 
 > "Write a standalone Python script `test_query.py` that:
 > - Has a configurable question string and optional document ID at the top
@@ -248,7 +248,7 @@ ollama pull llama3.2
 
 ## Phase 3 — HTMX Frontend
 
-### 3.1 — Base Template
+### 3.1 — Base Template COMPLETED
 
 > "Create a Django base template at `templates/base.html` for PolicyIQ.
 >
@@ -262,7 +262,7 @@ ollama pull llama3.2
 
 ---
 
-### 3.2 — Upload Form
+### 3.2 — Upload Form COMPLETED
 
 > "Build the HTMX upload form template and corresponding Django view for PolicyIQ.
 >
@@ -277,7 +277,7 @@ ollama pull llama3.2
 
 ---
 
-### 3.3 — Upload History
+### 3.3 — Upload History COMPLETED
 
 > "Build the upload history view for PolicyIQ.
 >
@@ -290,7 +290,7 @@ ollama pull llama3.2
 
 ---
 
-### 3.4 — Question Input
+### 3.4 — Question Input COMPLETED
 
 > "Build the question input template for PolicyIQ.
 >
@@ -306,7 +306,7 @@ ollama pull llama3.2
 
 ---
 
-### 3.5 — Citations Panel
+### 3.5 — Citations Panel COMPLETED
 
 > "Build the citations panel for PolicyIQ's query page.
 >
@@ -322,13 +322,13 @@ ollama pull llama3.2
 
 ## Phase 4 — Polish
 
-### 4.1 — Multi-Document Upload
+### 4.1 — Multi-Document Upload COMPLETED
 
 > "Update the upload view and form in PolicyIQ to support uploading multiple PDFs at once. The form should accept multiple files. The view should process each file through the full ingestion pipeline sequentially and return a summary response listing each document's name and chunk count, or an error per file if any individual file fails. The other files should still complete even if one fails."
 
 ---
 
-### 4.2 — Similarity Score Indicator
+### 4.2 — Similarity Score Indicator COMPLETED
 
 > "Add a visual similarity score indicator to the citations panel in PolicyIQ. For each citation, show a small colored bar next to the score: green for scores above 0.75, yellow for 0.5–0.75, red below 0.5. Add a tooltip on hover explaining what the score means in plain English: 'How closely this passage matched your question.'"
 

@@ -64,10 +64,15 @@
 
     var html = '<div class="card"><h3>Sources</h3>';
     citations.forEach(function (c) {
-      var scorePct = Math.round((c.similarity_score || 0) * 100);
+      var score = c.similarity_score || 0;
+      var scorePct = Math.round(score * 100);
+      var barColor = score > 0.75 ? '#15803d' : (score >= 0.5 ? '#a16207' : '#b91c1c');
       html += '<div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">';
       html += '<p style="margin: 0 0 4px 0; font-weight: 600;">' + escapeHtml(c.document_name || 'Unknown') + ' – page ' + (c.page_number || '?') + '</p>';
-      html += '<p style="margin: 0 0 4px 0; font-size: 0.85rem; color: var(--text-secondary);">Match: ' + scorePct + '%</p>';
+      html += '<p style="margin: 0 0 4px 0; font-size: 0.85rem; color: var(--text-secondary);">';
+      html += '<span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: ' + barColor + '; margin-right: 6px; vertical-align: middle;"></span>';
+      html += '<span title="How closely this passage matched your question.">Match: ' + scorePct + '%</span>';
+      html += '</p>';
       html += '<p style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">' + escapeHtml(c.text_preview || '') + '</p>';
       html += '</div>';
     });

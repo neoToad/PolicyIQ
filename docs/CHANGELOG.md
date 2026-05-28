@@ -97,4 +97,9 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Updated `_upload_result.html` to display a summary of all results with per-file status
 - Also updated `DocumentUploadAPIView` to support multiple files for API parity
 
+### [Phase4.2] Similarity score indicator
+- Updated citations JavaScript in `templates/queries/ask.html`
+- Added colored bar next to each score: green > 0.75, yellow 0.5–0.75, red < 0.5
+- Added tooltip on hover: "How closely this passage matched your question."
+
 

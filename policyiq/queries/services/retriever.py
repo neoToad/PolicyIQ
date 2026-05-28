@@ -21,11 +21,16 @@ def retrieve_chunks(query: str, document_id: str = None, top_k: int = 5) -> list
     distances = results.get("distances", [[]])[0]
 
     for i in range(len(ids)):
+        # ChromaDB default l2 space returns squared L2 distance.
+        # nomic-embed-text produces unit vectors, so:
+        #   cosine_similarity = 1 - (squared_l2_distance / 2)
+        raw_distance = distances[i]
+        similarity = max(0.0, round(1 - raw_distance / 2, 4))
         chunks.append({
             "text": documents[i],
             "page_number": metadatas[i].get("page_number"),
             "document_id": metadatas[i].get("document_id"),
-            "similarity_score": round(1 - distances[i], 4),
+            "similarity_score": similarity,
         })
 
     if chunks:
