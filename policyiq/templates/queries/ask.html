@@ -32,4 +32,55 @@
   </div>
 
   <div id="answer" class="mt-4"></div>
+
+  <div id="citations" class="mt-4" style="display: none;"></div>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+  document.addEventListener('htmx:afterRequest', function (evt) {
+    var target = evt.detail.target;
+    if (!target || target.id !== 'answer') return;
+
+    var header = evt.detail.xhr.getResponseHeader('X-Citations');
+    var panel = document.getElementById('citations');
+    if (!header) {
+      panel.style.display = 'none';
+      panel.innerHTML = '';
+      return;
+    }
+
+    try {
+      var citations = JSON.parse(header);
+    } catch (e) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    if (!citations.length) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    var html = '<div class="card"><h3>Sources</h3>';
+    citations.forEach(function (c) {
+      var scorePct = Math.round((c.similarity_score || 0) * 100);
+      html += '<div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">';
+      html += '<p style="margin: 0 0 4px 0; font-weight: 600;">' + escapeHtml(c.document_name || 'Unknown') + ' – page ' + (c.page_number || '?') + '</p>';
+      html += '<p style="margin: 0 0 4px 0; font-size: 0.85rem; color: var(--text-secondary);">Match: ' + scorePct + '%</p>';
+      html += '<p style="margin: 0; font-size: 0.9rem; color: var(--text-secondary);">' + escapeHtml(c.text_preview || '') + '</p>';
+      html += '</div>';
+    });
+    html += '</div>';
+
+    panel.innerHTML = html;
+    panel.style.display = 'block';
+  });
+
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+</script>
 {% endblock %}

@@ -1,12 +1,12 @@
 # Current Task
 
-**Step 3.4 — Question Input**
+**Step 3.5 — Citations Panel**
 
-Building the question input template and ask view for PolicyIQ.
+Adding the citations panel to PolicyIQ's query page.
 
-- Updating `AskPageView` to handle GET (with documents dropdown) and POST (query pipeline)
-- Rewriting `templates/queries/ask.html` with HTMX form: textarea, document selector, loading indicator
-- POST returns HTML partials or a StreamingHttpResponse with HTML-wrapped tokens
-- Preserves X-Citations header for the citations panel in step 3.5
+- Added `#citations` div below `#answer` in `templates/queries/ask.html`
+- JavaScript listens to `htmx:afterRequest`, reads `X-Citations` header, and renders a sources card
+- Each citation shows document name, page number, similarity score as a percentage, and a 150-char preview
+- Panel is hidden when no citations are present
 
-Next: 3.5 — Citations Panel.
+Next: Phase 4 — Polish (4.1 Multi-Document Upload).

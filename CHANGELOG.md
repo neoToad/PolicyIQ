@@ -80,4 +80,14 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - POST returns HTML partials or a StreamingHttpResponse with HTML-wrapped tokens
 - Preserves X-Citations header for the citations panel in step 3.5
 
+### [Phase3.5] Citations panel
+- Added `#citations` div below `#answer` in `templates/queries/ask.html`
+- JavaScript listens to `htmx:afterRequest`, reads `X-Citations` header, and renders a sources card
+- Each citation shows document name, page number, similarity score as a percentage, and a 150-char preview
+- Panel is hidden when no citations are present (e.g., low-similarity or error responses)
+
+---
+
+## Phase 4 — Polish
+
 
