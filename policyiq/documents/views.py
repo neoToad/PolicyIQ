@@ -15,9 +15,72 @@ from documents.services.extractor import clean_pages, extract_pages
 from documents.services.indexer import index_document
 
 
+def _save_upload_and_ingest(upload) -> Document:
+    """Save the uploaded PDF to disk and run the full ingestion pipeline."""
+    media_root = Path(getattr(settings, "MEDIA_ROOT", settings.BASE_DIR / "media"))
+    documents_dir = media_root / "documents"
+    documents_dir.mkdir(parents=True, exist_ok=True)
+    file_path = documents_dir / upload.name
+
+    with file_path.open("wb+") as destination:
+        for chunk in upload.chunks():
+            destination.write(chunk)
+
+    pages = extract_pages(str(file_path))
+    cleaned_pages = clean_pages(pages)
+    chunks = chunk_pages(cleaned_pages)
+    embedded_chunks = embed_chunks(chunks)
+
+    document = Document.objects.create(
+        name=upload.name,
+        file_path=str(file_path),
+        page_count=len(pages),
+        chunk_count=len(embedded_chunks),
+    )
+    Chunk.objects.bulk_create(
+        [
+            Chunk(
+                document=document,
+                page_number=chunk["page_number"],
+                token_offset=chunk["token_offset"],
+                text=chunk["text"],
+            )
+            for chunk in embedded_chunks
+        ]
+    )
+    index_document(str(document.id), embedded_chunks)
+    return document
+
+
 class UploadPageView(View):
     def get(self, request):
         return render(request, "documents/upload.html")
+
+    def post(self, request):
+        upload = request.FILES.get("file")
+        if upload is None:
+            return render(
+                request,
+                "documents/_upload_result.html",
+                {"error": "A PDF file is required."},
+                status=400,
+            )
+
+        try:
+            document = _save_upload_and_ingest(upload)
+            return render(
+                request,
+                "documents/_upload_result.html",
+                {"document": document},
+                status=201,
+            )
+        except Exception as exc:
+            return render(
+                request,
+                "documents/_upload_result.html",
+                {"error": f"Document ingestion failed: {exc}"},
+                status=500,
+            )
 
 
 class HistoryPageView(View):
@@ -35,39 +98,7 @@ class DocumentUploadAPIView(APIView):
             )
 
         try:
-            media_root = Path(getattr(settings, "MEDIA_ROOT", settings.BASE_DIR / "media"))
-            documents_dir = media_root / "documents"
-            documents_dir.mkdir(parents=True, exist_ok=True)
-            file_path = documents_dir / upload.name
-
-            with file_path.open("wb+") as destination:
-                for chunk in upload.chunks():
-                    destination.write(chunk)
-
-            pages = extract_pages(str(file_path))
-            cleaned_pages = clean_pages(pages)
-            chunks = chunk_pages(cleaned_pages)
-            embedded_chunks = embed_chunks(chunks)
-
-            document = Document.objects.create(
-                name=upload.name,
-                file_path=str(file_path),
-                page_count=len(pages),
-                chunk_count=len(embedded_chunks),
-            )
-            Chunk.objects.bulk_create(
-                [
-                    Chunk(
-                        document=document,
-                        page_number=chunk["page_number"],
-                        token_offset=chunk["token_offset"],
-                        text=chunk["text"],
-                    )
-                    for chunk in embedded_chunks
-                ]
-            )
-            index_document(str(document.id), embedded_chunks)
-
+            document = _save_upload_and_ingest(upload)
             return Response(
                 {
                     "document_id": str(document.id),

@@ -4,5 +4,25 @@
 
 {% block content %}
   <h1>Upload Document</h1>
-  <p class="text-secondary">Upload form coming in step 3.2.</p>
+  <p class="text-secondary mb-2">Select a PDF to ingest into the knowledge base.</p>
+
+  <div class="card">
+    <form
+      hx-post="{% url 'upload-page' %}"
+      hx-encoding="multipart/form-data"
+      hx-target="#upload-result"
+      hx-swap="innerHTML"
+      hx-indicator="#upload-indicator"
+    >
+      <label for="file">PDF file</label>
+      <input type="file" id="file" name="file" accept="application/pdf" required>
+
+      <div class="mt-4">
+        <button type="submit">Upload</button>
+        <span id="upload-indicator" class="htmx-indicator">Processing…</span>
+      </div>
+    </form>
+  </div>
+
+  <div id="upload-result" class="mt-4"></div>
 {% endblock %}

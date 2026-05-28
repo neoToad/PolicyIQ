@@ -1,12 +1,12 @@
 # Current Task
 
-**Step 3.1 — Base Template**
+**Step 3.2 — Upload Form**
 
-Creating the Django base template and page scaffolding for PolicyIQ.
+Building the HTMX upload form and updating the upload view for PolicyIQ.
 
-- Building `templates/base.html` with HTMX CDN, minimal CSS, and top nav
-- Adding stub page views (`UploadPageView`, `HistoryPageView`, `AskPageView`) so nav links resolve
-- Wiring page URLs into root `urls.py`
-- Placeholder templates for upload, history, and ask pages
+- Rewriting `templates/documents/upload.html` with HTMX file upload form
+- Adding `templates/documents/_upload_result.html` partial for success/error feedback
+- Updating `UploadPageView` to handle POST and return HTML partials
+- Refactoring ingestion pipeline into `_save_upload_and_ingest()` shared by page view and API view
 
-Next: 3.2 — Upload Form.
+Next: 3.3 — Upload History.

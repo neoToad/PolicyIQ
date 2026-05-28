@@ -61,4 +61,10 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Wired page URLs into root `urls.py` with named routes (`upload-page`, `history-page`, `ask-page`)
 - Added placeholder templates for upload, history, and ask pages to prevent 404s
 
+### [Phase3.2] Upload form
+- Rewrote `templates/documents/upload.html` with HTMX file upload form (PDF-only, multipart encoding)
+- Added `templates/documents/_upload_result.html` partial for success/error feedback swapped by HTMX
+- Updated `UploadPageView` to handle POST and return HTML partials instead of JSON
+- Refactored ingestion pipeline into `_save_upload_and_ingest()` shared by page view and API view
+
 

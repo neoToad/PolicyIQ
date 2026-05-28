@@ -1,0 +1,10 @@
+<div class="card">
+  {% if document %}
+    <h3>Upload Successful</h3>
+    <p><strong>Name:</strong> {{ document.name }}</p>
+    <p><strong>Pages:</strong> {{ document.page_count }}</p>
+    <p><strong>Chunks:</strong> {{ document.chunk_count }}</p>
+  {% elif error %}
+    <p class="text-secondary" style="color: #b91c1c;"><strong>Error:</strong> {{ error }}</p>
+  {% endif %}
+</div>
