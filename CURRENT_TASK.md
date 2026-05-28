@@ -1,14 +1,13 @@
 ﻿# Current Task
 
-**Step 2.4 — Query View**
+**Step 2.5 — Query Smoke Test**
 
-Building queries/views.py for PolicyIQ.
+Writing 	est_query.py for PolicyIQ.
 
-- Implementing a DRF APIView that:
-  - Accepts POST with question and optional document_id
-  - Runs etrieve_chunks -> uild_prompt -> generate_response
-  - Returns JSON with {'answer': 'No relevant information found...'} when prompt is None
-  - Returns StreamingHttpResponse for successful generations
-  - Adds X-Citations header with serialized chunk metadata
+- Standalone script (not a Django test) for manual end-to-end pipeline validation
+- Configurable question string and optional document_id at the top
+- Calls etrieve_chunks, prints each chunk with score and page number
+- Calls uild_prompt and prints the full prompt
+- Calls generate_response and prints streamed output token by token
 
-Next: 2.5 — Query Smoke Test.
+Next: Phase 3 — HTMX Frontend (3.1 Base Template).

@@ -33,3 +33,12 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Streams Ollama generate API line-by-line with equests streaming
 - Retry logic (3 attempts) with clear RuntimeError on unreachable service
 - Added unit tests for streaming, retry success, and unreachable failure
+
+### [Phase2.4] Query view
+- Built QueryAPIView in queries/views.py as a DRF APIView
+- Wires etrieve_chunks -> uild_prompt -> generate_response
+- Returns StreamingHttpResponse with plain text when chunks are relevant
+- Returns JSON {'answer': 'No relevant information found...'} when prompt is None
+- Adds X-Citations header with document name, page number, score, and text preview
+- Created queries/urls.py and wired into root urls.py
+- Added comprehensive view tests for streaming, no-results, document filter, and citations header
