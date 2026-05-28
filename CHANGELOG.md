@@ -74,4 +74,10 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Rewrote `templates/documents/history.html` with a table and HTMX delete buttons
 - Delete buttons use `hx-confirm`, `hx-target` on the row, and `outerHTML` swap for smooth removal
 
+### [Phase3.4] Question input
+- Updated `AskPageView` to handle GET (documents dropdown) and POST (query pipeline)
+- Rewrote `templates/queries/ask.html` with HTMX form: textarea, document selector, loading indicator
+- POST returns HTML partials or a StreamingHttpResponse with HTML-wrapped tokens
+- Preserves X-Citations header for the citations panel in step 3.5
+
 

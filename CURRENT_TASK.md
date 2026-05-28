@@ -1,12 +1,12 @@
 # Current Task
 
-**Step 3.3 — Upload History**
+**Step 3.4 — Question Input**
 
-Building the upload history view for PolicyIQ.
+Building the question input template and ask view for PolicyIQ.
 
-- Updating `HistoryPageView` to fetch all documents and render `templates/documents/history.html`
-- Adding `DocumentDeleteView` to remove documents from PostgreSQL and ChromaDB
-- Wiring delete URL at `/documents/<uuid>/delete/`
-- Table with HTMX delete buttons that remove the row on success
+- Updating `AskPageView` to handle GET (with documents dropdown) and POST (query pipeline)
+- Rewriting `templates/queries/ask.html` with HTMX form: textarea, document selector, loading indicator
+- POST returns HTML partials or a StreamingHttpResponse with HTML-wrapped tokens
+- Preserves X-Citations header for the citations panel in step 3.5
 
-Next: 3.4 — Question Input.
+Next: 3.5 — Citations Panel.

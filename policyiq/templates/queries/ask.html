@@ -4,5 +4,32 @@
 
 {% block content %}
   <h1>Ask a Question</h1>
-  <p class="text-secondary">Query form coming in step 3.4.</p>
+  <p class="text-secondary mb-2">Ask a plain-language question about your uploaded policy documents.</p>
+
+  <div class="card">
+    <form
+      hx-post="{% url 'ask-page' %}"
+      hx-target="#answer"
+      hx-swap="innerHTML"
+      hx-indicator="#ask-indicator"
+    >
+      <label for="question">Question</label>
+      <textarea id="question" name="question" rows="4" placeholder="Enter your question..." required></textarea>
+
+      <label for="document_id" class="mt-4">Document (optional)</label>
+      <select id="document_id" name="document_id">
+        <option value="">All Documents</option>
+        {% for doc in documents %}
+          <option value="{{ doc.id }}">{{ doc.name }}</option>
+        {% endfor %}
+      </select>
+
+      <div class="mt-4">
+        <button type="submit">Ask</button>
+        <span id="ask-indicator" class="htmx-indicator">Thinking…</span>
+      </div>
+    </form>
+  </div>
+
+  <div id="answer" class="mt-4"></div>
 {% endblock %}
