@@ -1,13 +1,12 @@
 # Current Task
 
-**Step 2.5 — Query Smoke Test**
+**Step 3.1 — Base Template**
 
-Writing `test_query.py` for PolicyIQ.
+Creating the Django base template and page scaffolding for PolicyIQ.
 
-- Standalone script (not a Django test) for manual end-to-end pipeline validation
-- Configurable question string and optional document_id at the top
-- Calls retrieve_chunks, prints each chunk with score and page number
-- Calls build_prompt and prints the full prompt
-- Calls generate_response and prints streamed output token by token
+- Building `templates/base.html` with HTMX CDN, minimal CSS, and top nav
+- Adding stub page views (`UploadPageView`, `HistoryPageView`, `AskPageView`) so nav links resolve
+- Wiring page URLs into root `urls.py`
+- Placeholder templates for upload, history, and ask pages
 
-Next: Phase 3 — HTMX Frontend (3.1 Base Template).
+Next: 3.2 — Upload Form.

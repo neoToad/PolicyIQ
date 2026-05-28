@@ -1,12 +1,19 @@
 ﻿import json
 
 from django.http import StreamingHttpResponse
+from django.shortcuts import render
+from django.views import View
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from queries.services.generator import build_prompt, generate_response
 from queries.services.retriever import retrieve_chunks
+
+
+class AskPageView(View):
+    def get(self, request):
+        return render(request, "queries/ask.html")
 
 
 class QueryAPIView(APIView):

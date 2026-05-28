@@ -50,3 +50,15 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Prints the full built prompt before streaming
 - Streams generate_response token by token to stdout
 
+---
+
+## Phase 3 — HTMX Frontend
+
+### [Phase3.1] Base template
+- Created `templates/base.html` with HTMX CDN, minimal CSS, and top nav
+- Styled as a professional internal tool: neutral colors, high contrast, no decoration
+- Added stub page views (`UploadPageView`, `HistoryPageView`, `AskPageView`) so nav links resolve
+- Wired page URLs into root `urls.py` with named routes (`upload-page`, `history-page`, `ask-page`)
+- Added placeholder templates for upload, history, and ask pages to prevent 404s
+
+

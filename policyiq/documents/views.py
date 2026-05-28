@@ -1,6 +1,9 @@
 from pathlib import Path
 
 from django.conf import settings
+from django.http import HttpResponse
+from django.shortcuts import render
+from django.views import View
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,6 +13,16 @@ from documents.services.chunker import chunk_pages
 from documents.services.embedder import embed_chunks
 from documents.services.extractor import clean_pages, extract_pages
 from documents.services.indexer import index_document
+
+
+class UploadPageView(View):
+    def get(self, request):
+        return render(request, "documents/upload.html")
+
+
+class HistoryPageView(View):
+    def get(self, request):
+        return render(request, "documents/history.html")
 
 
 class DocumentUploadAPIView(APIView):
