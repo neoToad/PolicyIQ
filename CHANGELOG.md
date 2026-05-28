@@ -42,3 +42,11 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Adds X-Citations header with document name, page number, score, and text preview
 - Created queries/urls.py and wired into root urls.py
 - Added comprehensive view tests for streaming, no-results, document filter, and citations header
+
+### [Phase2.5] Query smoke test
+- Added `test_query.py` standalone script for manual end-to-end pipeline validation
+- Configurable question and optional document_id at the top
+- Prints retrieved chunks with similarity scores, page numbers, and previews
+- Prints the full built prompt before streaming
+- Streams generate_response token by token to stdout
+
