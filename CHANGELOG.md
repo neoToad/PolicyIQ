@@ -27,3 +27,9 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Added threshold-based guard that returns None when no chunk is relevant enough
 - Constructed grounded prompt with document name, page number, and chunk text per citation
 - Added retriever refactor to enrich chunks with document_name from PostgreSQL
+
+### [Phase2.3] Generator
+- Added generate_response() generator to queries/services/generator.py
+- Streams Ollama generate API line-by-line with equests streaming
+- Retry logic (3 attempts) with clear RuntimeError on unreachable service
+- Added unit tests for streaming, retry success, and unreachable failure

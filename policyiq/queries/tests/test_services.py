@@ -2,7 +2,8 @@
 
 from django.test import SimpleTestCase
 
-from queries.services.generator import build_prompt
+import requests
+from queries.services.generator import build_prompt, generate_response
 from queries.services.retriever import retrieve_chunks
 
 
@@ -123,3 +124,54 @@ class BuildPromptTests(SimpleTestCase):
         self.assertIn("Is prior auth needed?", prompt)
         self.assertIn("Answer only from the provided context", prompt)
         self.assertIn("do not speculate", prompt.lower())
+
+
+class GenerateResponseTests(SimpleTestCase):
+    @mock.patch("queries.services.generator.requests.post")
+    def test_generate_response_yields_tokens_from_stream(self, mock_post):
+        mock_response = mock.Mock()
+        mock_response.iter_lines.return_value = [
+            b'{"response":"Hello"}',
+            b'{"response":" world"}',
+            b'{"response":"","done":true}',
+        ]
+        mock_response.raise_for_status = mock.Mock()
+        mock_post.return_value = mock_response
+
+        tokens = list(generate_response("test prompt"))
+
+        self.assertEqual(tokens, ["Hello", " world"])
+        mock_post.assert_called_once()
+        call_kwargs = mock_post.call_args.kwargs
+        self.assertEqual(call_kwargs["json"]["model"], "llama3.2")
+        self.assertTrue(call_kwargs["json"]["stream"])
+        self.assertEqual(call_kwargs["stream"], True)
+
+    @mock.patch("queries.services.generator.time.sleep")
+    @mock.patch("queries.services.generator.requests.post")
+    def test_generate_response_retries_then_succeeds(self, mock_post, mock_sleep):
+        mock_response = mock.Mock()
+        mock_response.iter_lines.return_value = [b'{"response":"ok"}']
+        mock_response.raise_for_status = mock.Mock()
+        mock_post.side_effect = [
+            requests.RequestException("connection dropped"),
+            mock_response,
+        ]
+
+        tokens = list(generate_response("test prompt"))
+
+        self.assertEqual(tokens, ["ok"])
+        self.assertEqual(mock_post.call_count, 2)
+
+    @mock.patch("queries.services.generator.time.sleep")
+    @mock.patch("queries.services.generator.requests.post")
+    def test_generate_response_raises_clear_error_when_ollama_unreachable(
+        self, mock_post, mock_sleep
+    ):
+        mock_post.side_effect = requests.RequestException("unreachable")
+
+        with self.assertRaisesRegex(RuntimeError, "Ollama"):
+            list(generate_response("test prompt"))
+
+        self.assertEqual(mock_post.call_count, 3)
+        self.assertEqual(mock_sleep.call_count, 2)
