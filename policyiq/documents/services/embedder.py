@@ -32,7 +32,12 @@ def _embed_text(text: str) -> list[float]:
             embedding = data.get("embedding")
             if not isinstance(embedding, list):
                 raise ValueError("Ollama response missing 'embedding' list.")
-            return embedding
+            # nomic-embed-text via Ollama does not guarantee unit vectors.
+            # Normalize so ChromaDB l2 distances map to cosine similarity.
+            norm = sum(x * x for x in embedding) ** 0.5
+            if norm == 0:
+                raise ValueError("Ollama returned a zero-length embedding.")
+            return [x / norm for x in embedding]
         except (requests.RequestException, ValueError) as exc:
             last_error = exc
             if attempt < RETRY_ATTEMPTS:

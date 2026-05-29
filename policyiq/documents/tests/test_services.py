@@ -66,11 +66,11 @@ class EmbedderTests(SimpleTestCase):
         mock_post.side_effect = [
             mock.Mock(
                 raise_for_status=mock.Mock(),
-                json=mock.Mock(return_value={"embedding": [0.1, 0.2]}),
+                json=mock.Mock(return_value={"embedding": [3.0, 4.0]}),
             ),
             mock.Mock(
                 raise_for_status=mock.Mock(),
-                json=mock.Mock(return_value={"embedding": [0.3, 0.4]}),
+                json=mock.Mock(return_value={"embedding": [0.0, 1.0]}),
             ),
         ]
         chunks = [
@@ -80,8 +80,8 @@ class EmbedderTests(SimpleTestCase):
 
         result = embed_chunks(chunks)
 
-        self.assertEqual(result[0]["embedding"], [0.1, 0.2])
-        self.assertEqual(result[1]["embedding"], [0.3, 0.4])
+        self.assertEqual(result[0]["embedding"], [0.6, 0.8])
+        self.assertEqual(result[1]["embedding"], [0.0, 1.0])
         self.assertEqual(mock_post.call_count, 2)
 
     @mock.patch("documents.services.embedder.time.sleep")
@@ -91,13 +91,13 @@ class EmbedderTests(SimpleTestCase):
             requests.RequestException("connection dropped"),
             mock.Mock(
                 raise_for_status=mock.Mock(),
-                json=mock.Mock(return_value={"embedding": [0.9]}),
+                json=mock.Mock(return_value={"embedding": [1.0]}),
             ),
         ]
 
         result = embed_query("policy question")
 
-        self.assertEqual(result, [0.9])
+        self.assertEqual(result, [1.0])
         self.assertEqual(mock_post.call_count, 2)
         mock_sleep.assert_called_once_with(1)
 
