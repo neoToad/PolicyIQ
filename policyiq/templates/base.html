@@ -180,6 +180,9 @@
           <a href="{% url 'upload-page' %}">Upload</a>
           <a href="{% url 'ask-page' %}">Ask</a>
           <a href="{% url 'history-page' %}">History</a>
+          {% if user.is_staff %}
+            <a href="{% url 'staff-documents' %}">Admin</a>
+          {% endif %}
         </div>
       </nav>
     </div>

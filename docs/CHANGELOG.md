@@ -102,4 +102,15 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Added colored bar next to each score: green > 0.75, yellow 0.5–0.75, red < 0.5
 - Added tooltip on hover: "How closely this passage matched your question."
 
+### [Phase4.3] Admin delete and re-index
+- Added `StaffDocumentListView`, `StaffDocumentDeleteView`, `StaffDocumentReindexView` in `documents/views.py`
+- All protected by `@staff_member_required` via `method_decorator`
+- `StaffDocumentListView` renders `templates/documents/admin.html` with document table
+- `StaffDocumentDeleteView` removes from PostgreSQL and ChromaDB
+- `StaffDocumentReindexView` purges old chunks, re-runs full extraction → clean → chunk → embed → index pipeline from the stored file, and updates `page_count` and `chunk_count`
+- Wired URLs at `/admin/documents/`, `/admin/documents/<uuid>/delete/`, `/admin/documents/<uuid>/reindex/`
+- Added conditional "Admin" nav link in `base.html` for staff users
+- Wrote tests first (TDD): staff access control, list rendering, delete orchestration, and re-index pipeline
+- **Refactor/fix:** Updated existing `DocumentUploadAPITests` to match the multi-file response format introduced in Phase 4.1 (tests were failing on `document_id` and `error` key lookups)
+
 

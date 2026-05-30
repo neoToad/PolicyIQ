@@ -1,10 +1,20 @@
 ﻿from django.contrib import admin
 from django.urls import include, path
 
-from documents.views import DocumentDeleteView, HistoryPageView, UploadPageView
+from documents.views import (
+    DocumentDeleteView,
+    HistoryPageView,
+    StaffDocumentDeleteView,
+    StaffDocumentListView,
+    StaffDocumentReindexView,
+    UploadPageView,
+)
 from queries.views import AskPageView
 
 urlpatterns = [
+    path('admin/documents/', StaffDocumentListView.as_view(), name='staff-documents'),
+    path('admin/documents/<uuid:pk>/delete/', StaffDocumentDeleteView.as_view(), name='staff-document-delete'),
+    path('admin/documents/<uuid:pk>/reindex/', StaffDocumentReindexView.as_view(), name='document-reindex'),
     path('admin/', admin.site.urls),
     path('api/documents/', include('documents.urls')),
     path('api/queries/', include('queries.urls')),

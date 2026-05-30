@@ -1,11 +1,13 @@
 # Current Task
 
-**Step 4.2 — Similarity Score Indicator**
+**Step 4.3 — Admin Delete and Re-index**
 
-Adding a visual similarity score indicator to the citations panel.
+Building a staff-only admin view for document management.
 
-- Updated the citations JavaScript in `templates/queries/ask.html`
-- Added colored bar next to each score: green > 0.75, yellow 0.5–0.75, red < 0.5
-- Added tooltip on hover: "How closely this passage matched your question."
+- Create `/admin/documents/` view protected by `@staff_member_required`
+- List all documents with metadata, delete buttons, and re-index buttons
+- Delete removes from both PostgreSQL and ChromaDB
+- Re-index re-runs the full pipeline on the stored PDF and updates chunk counts
+- Writing tests first per TDD workflow
 
-Next: 4.3 — Admin Delete and Re-index.
+Next: 4.4 — LLM Config Swap.
