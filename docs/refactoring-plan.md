@@ -17,7 +17,7 @@ This plan is organized into 5 phases by priority: security first, then architect
 
 These items are actively dangerous in any deployed or shared environment.
 
-### 1.1 Remove committed `.env` from git history
+### 1.1 Remove committed `.env` from git history ✅ COMPLETED
 
 **Problem**: `policyiq/.env` contains a real password (`policyiq_pass_2026`) and is tracked in git despite `.gitignore` having an `.env` entry. The file was committed before the gitignore rule was added.
 
@@ -27,7 +27,7 @@ These items are actively dangerous in any deployed or shared environment.
 - Rotate the database password
 - Consider `git filter-repo` to scrub history if the repo has ever been pushed to a remote
 
-### 1.2 Replace hard-coded `SECRET_KEY`
+### 1.2 Replace hard-coded `SECRET_KEY` ✅ COMPLETED
 
 **Problem**: `settings.py` contains `SECRET_KEY = 'django-insecure-change-me'` — never changed from the Django scaffold.
 
@@ -36,7 +36,7 @@ These items are actively dangerous in any deployed or shared environment.
 - Add to `.env` with a cryptographically random value
 - Fail loudly if missing in production (`django-insecure-` prefix check or `DEBUG=False` guard)
 
-### 1.3 Add API authentication
+### 1.3 Add API authentication ✅ COMPLETED
 
 **Problem**: `DocumentUploadAPIView` and `QueryAPIView` have zero authentication. Anyone can upload files and run queries.
 
@@ -46,7 +46,7 @@ These items are actively dangerous in any deployed or shared environment.
 - Consider token auth (`rest_framework.authentication.TokenAuthentication`) for the API layer
 - Staff views already use `@staff_member_required` — leave as-is
 
-### 1.4 Fix path traversal vulnerability in file uploads
+### 1.4 Fix path traversal vulnerability in file uploads ✅ COMPLETED
 
 **Problem**: `_save_upload_and_ingest()` uses `upload.name` directly to construct a file path via `open(settings.MEDIA_ROOT / upload.name, "wb+")`. A filename like `../../etc/passwd` could write outside the media directory.
 
@@ -87,7 +87,7 @@ These items are actively dangerous in any deployed or shared environment.
 
 These items reduce coupling, enable independent evolution, and fix design problems that will block scaling.
 
-### 2.1 Replace `CharField` file_path with `FileField`
+### 2.1 Replace `CharField` file_path with `FileField` ✅ COMPLETED
 
 **Problem**: `Document.file_path` is a `CharField` storing a manual filesystem path. This bypasses Django's `Storage` abstraction, prevents `document.delete()` from cleaning up files on disk, and makes the admin/media integration broken.
 
@@ -143,7 +143,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Use `@functools.lru_cache` or a simple module variable
 - Ensure the client is created lazily (on first access, not at import time)
 
-### 2.7 Set `MEDIA_ROOT` and `MEDIA_URL` in settings
+### 2.7 Set `MEDIA_ROOT` and `MEDIA_URL` in settings ✅ COMPLETED
 
 **Problem**: `UploadPageView` falls back to `settings.BASE_DIR / "media"` via `getattr`. Django admin and standard file handling don't know where media files are.
 
