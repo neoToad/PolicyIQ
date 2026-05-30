@@ -28,7 +28,8 @@ The prompt plan is your implementation spec — execute every prompt in it, in o
 Maintain two markdown files in the repo root throughout the entire build. Update them continuously — not just at the end.
 
 ### CURRENT_TASK.md
-Keep this file up to date at all times. It should always reflect exactly what is happening right now:
+Keep this file up to date at all times. It should always reflect exactly what is happening right now and should be updated
+before working on the step:
 - The current step number and name
 - What you are actively working on
 - Any blockers or decisions being made
@@ -43,11 +44,6 @@ Append an entry after every commit. Each entry should include:
 - Any refactors or improvements made beyond the spec (see below)
 - Any deviations from the spec and why
 
----
-
-## Context Management
-
-After completing and committing each step, run /clear before starting the next one.
 
 ---
 
