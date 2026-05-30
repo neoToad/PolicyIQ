@@ -2,6 +2,12 @@
 import time
 
 import requests
+from django.conf import settings
+
+try:
+    import anthropic
+except ImportError:  # pragma: no cover
+    anthropic = None  # type: ignore
 
 OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
 OLLAMA_GENERATE_MODEL = "llama3.2"
@@ -9,7 +15,7 @@ RETRY_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 1
 
 
-def generate_response(prompt: str):
+def _generate_ollama(prompt: str):
     payload = {"model": OLLAMA_GENERATE_MODEL, "prompt": prompt, "stream": True}
     last_error: Exception | None = None
 
@@ -34,6 +40,49 @@ def generate_response(prompt: str):
         "Ollama generation service is unreachable after 3 attempts at "
         "http://localhost:11434/api/generate."
     ) from last_error
+
+
+ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+ANTHROPIC_MAX_TOKENS = 1024
+
+
+def _generate_anthropic(prompt: str):
+    if anthropic is None:
+        raise RuntimeError(
+            "Anthropic SDK is not installed. Install it with: pip install anthropic"
+        )
+    api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
+    if not api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY is not configured. Set it in your environment or Django settings."
+        )
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        with client.messages.stream(
+            model=ANTHROPIC_MODEL,
+            max_tokens=ANTHROPIC_MAX_TOKENS,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for event in stream:
+                if event.type == "content_block_delta" and hasattr(event.delta, "text"):
+                    text = event.delta.text
+                    if text:
+                        yield text
+    except Exception as exc:
+        raise RuntimeError(
+            "Anthropic generation service failed. Check your API key and network connection."
+        ) from exc
+
+
+def generate_response(prompt: str):
+    backend = getattr(settings, "LLM_BACKEND", "ollama")
+    if backend == "ollama":
+        yield from _generate_ollama(prompt)
+    elif backend == "anthropic":
+        yield from _generate_anthropic(prompt)
+    else:
+        raise ValueError(f"Unsupported LLM_BACKEND: {backend}")
 
 
 def build_prompt(question: str, chunks: list[dict], similarity_threshold: float = 0.5) -> str | None:

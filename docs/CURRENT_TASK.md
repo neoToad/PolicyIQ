@@ -1,13 +1,13 @@
 # Current Task
 
-**Step 4.3 — Admin Delete and Re-index**
+**Step 4.4 — LLM Config Swap**
 
-Building a staff-only admin view for document management.
+Adding a configurable LLM backend so PolicyIQ can switch between Ollama (local, free) and Anthropic API (production demo) with a single settings change.
 
-- Create `/admin/documents/` view protected by `@staff_member_required`
-- List all documents with metadata, delete buttons, and re-index buttons
-- Delete removes from both PostgreSQL and ChromaDB
-- Re-index re-runs the full pipeline on the stored PDF and updates chunk counts
+- Add `LLM_BACKEND` setting (`ollama` or `anthropic`) and `ANTHROPIC_API_KEY` from env
+- Update `queries/services/generator.py` to route based on `LLM_BACKEND`
+- Build Anthropic streaming generator using `claude-sonnet-4-20250514`
+- Both backends consume the same `build_prompt()` output and yield streamed tokens
 - Writing tests first per TDD workflow
 
-Next: 4.4 — LLM Config Swap.
+Next: 4.5 — README.

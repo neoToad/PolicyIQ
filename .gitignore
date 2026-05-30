@@ -38,6 +38,7 @@ htmlcov/
 # IDE/editor
 .idea/
 .vscode/
+.claude
 
 # OS files
 .DS_Store

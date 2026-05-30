@@ -1,9 +1,9 @@
 ﻿from unittest import mock
 
-from django.test import SimpleTestCase
-
 import requests
-from queries.services.generator import build_prompt, generate_response
+from django.test import SimpleTestCase, override_settings
+
+from queries.services.generator import _generate_anthropic, _generate_ollama, build_prompt, generate_response
 from queries.services.retriever import retrieve_chunks
 
 
@@ -175,3 +175,65 @@ class GenerateResponseTests(SimpleTestCase):
 
         self.assertEqual(mock_post.call_count, 3)
         self.assertEqual(mock_sleep.call_count, 2)
+
+
+class DispatchTests(SimpleTestCase):
+    @mock.patch("queries.services.generator._generate_ollama")
+    @override_settings(LLM_BACKEND="ollama")
+    def test_generate_response_dispatches_to_ollama_by_default(self, mock_ollama):
+        mock_ollama.return_value = iter(["token1", "token2"])
+        tokens = list(generate_response("prompt"))
+        self.assertEqual(tokens, ["token1", "token2"])
+        mock_ollama.assert_called_once_with("prompt")
+
+    @mock.patch("queries.services.generator._generate_anthropic")
+    @override_settings(LLM_BACKEND="anthropic")
+    def test_generate_response_dispatches_to_anthropic_when_configured(self, mock_anthropic):
+        mock_anthropic.return_value = iter(["tokenA", "tokenB"])
+        tokens = list(generate_response("prompt"))
+        self.assertEqual(tokens, ["tokenA", "tokenB"])
+        mock_anthropic.assert_called_once_with("prompt")
+
+    @override_settings(LLM_BACKEND="unknown")
+    def test_generate_response_raises_for_unsupported_backend(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported LLM_BACKEND"):
+            list(generate_response("prompt"))
+
+
+class AnthropicGenerationTests(SimpleTestCase):
+    @mock.patch("queries.services.generator.settings")
+    @mock.patch("queries.services.generator.anthropic.Anthropic")
+    def test_generate_anthropic_yields_tokens_from_stream(self, mock_client_cls, mock_settings):
+        mock_settings.ANTHROPIC_API_KEY = "test-key"
+        mock_stream = mock.Mock()
+        mock_stream.__iter__ = mock.Mock(
+            return_value=iter([
+                mock.Mock(type="content_block_delta", delta=mock.Mock(text="Hello")),
+                mock.Mock(type="content_block_delta", delta=mock.Mock(text=" world")),
+                mock.Mock(type="message_stop"),
+            ])
+        )
+        mock_client = mock.Mock()
+        mock_client.messages.stream.return_value.__enter__ = mock.Mock(return_value=mock_stream)
+        mock_client.messages.stream.return_value.__exit__ = mock.Mock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        tokens = list(_generate_anthropic("test prompt"))
+
+        self.assertEqual(tokens, ["Hello", " world"])
+        mock_client_cls.assert_called_once_with(api_key="test-key")
+        call_kwargs = mock_client.messages.stream.call_args.kwargs
+        self.assertEqual(call_kwargs["model"], "claude-sonnet-4-20250514")
+        self.assertEqual(call_kwargs["max_tokens"], 1024)
+        self.assertIn("test prompt", call_kwargs["messages"][0]["content"])
+
+    @mock.patch("queries.services.generator.settings")
+    @mock.patch("queries.services.generator.anthropic.Anthropic")
+    def test_generate_anthropic_raises_clear_error_on_failure(self, mock_client_cls, mock_settings):
+        mock_settings.ANTHROPIC_API_KEY = "test-key"
+        mock_client = mock.Mock()
+        mock_client.messages.stream.side_effect = Exception("API error")
+        mock_client_cls.return_value = mock_client
+
+        with self.assertRaisesRegex(RuntimeError, "Anthropic"):
+            list(_generate_anthropic("test prompt"))

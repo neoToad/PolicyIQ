@@ -79,3 +79,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 CHROMA_PERSIST_DIR = BASE_DIR / 'chroma'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LLM_BACKEND = os.environ.get('LLM_BACKEND', 'ollama')
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')

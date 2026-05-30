@@ -113,4 +113,13 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Wrote tests first (TDD): staff access control, list rendering, delete orchestration, and re-index pipeline
 - **Refactor/fix:** Updated existing `DocumentUploadAPITests` to match the multi-file response format introduced in Phase 4.1 (tests were failing on `document_id` and `error` key lookups)
 
+### [Phase4.4] LLM config swap
+- Added `LLM_BACKEND` setting (`ollama` or `anthropic`) and `ANTHROPIC_API_KEY` from environment
+- Refactored `generate_response()` in `queries/services/generator.py` into a dispatcher
+- Extracted existing Ollama logic into `_generate_ollama()`
+- Added `_generate_anthropic()` using `claude-sonnet-4-20250514` via Anthropic SDK with streaming (`messages.stream`)
+- Both backends consume the same `build_prompt()` output and yield tokens
+- Added `anthropic==0.105.2` to `requirements.txt`
+- Wrote tests first (TDD): dispatch routing, Anthropic streaming, and Anthropic failure handling
+
 
