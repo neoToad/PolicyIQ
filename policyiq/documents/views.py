@@ -7,6 +7,7 @@ from django.shortcuts import render
 from django.utils.decorators import method_decorator
 from django.views import View
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -161,6 +162,7 @@ class StaffDocumentReindexView(View):
 
 
 class DocumentUploadAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request):
         uploads = request.FILES.getlist("file")
         if not uploads:

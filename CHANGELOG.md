@@ -16,3 +16,11 @@
 - Added generated secret key to `.env` file
 - Added `DJANGO_SECRET_KEY` and `DJANGO_DEBUG` to `.env.example`
 - **Improvement beyond spec**: Made `DEBUG` env-configurable too (not just `SECRET_KEY`)
+
+## [Phase1.3] Add API authentication
+- Added `REST_FRAMEWORK` config to `settings.py` with `SessionAuthentication` + `TokenAuthentication`
+- Added `rest_framework.authtoken` to `INSTALLED_APPS`
+- Set `DEFAULT_PERMISSION_CLASSES` to `[IsAuthenticated]`
+- Added `permission_classes = [IsAuthenticated]` explicitly on `DocumentUploadAPIView` and `QueryAPIView`
+- Updated all API tests to use `force_authenticate` with a mock user
+- **Improvement beyond spec**: Set default permission globally so any new DRF view is auth-protected by default

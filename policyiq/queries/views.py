@@ -4,6 +4,7 @@ from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.views import View
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -57,6 +58,7 @@ class AskPageView(View):
 
 
 class QueryAPIView(APIView):
+    permission_classes = [IsAuthenticated]
     def post(self, request):
         question = request.data.get("question", "").strip()
         document_id = request.data.get("document_id") or None

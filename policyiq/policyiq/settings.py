@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',
     'documents',
     'queries',
 ]
@@ -88,6 +89,17 @@ USE_TZ = True
 STATIC_URL = 'static/'
 CHROMA_PERSIST_DIR = BASE_DIR / 'chroma'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Django REST Framework
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 
 LLM_BACKEND = os.environ.get('LLM_BACKEND', 'ollama')
 ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')

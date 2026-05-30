@@ -5,7 +5,7 @@ from uuid import uuid4
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, override_settings
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from documents.models import Chunk, Document
 from documents.views import (
@@ -20,6 +20,9 @@ class DocumentUploadAPITests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = DocumentUploadAPIView.as_view()
+        self.user = mock.Mock()
+        self.user.is_authenticated = True
+        self.user.is_staff = False
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.views.Chunk.objects.bulk_create")
@@ -86,6 +89,7 @@ class DocumentUploadAPITests(SimpleTestCase):
             {"file": upload},
             format="multipart",
         )
+        force_authenticate(request, user=self.user)
 
         response = self.view(request)
 
@@ -125,6 +129,7 @@ class DocumentUploadAPITests(SimpleTestCase):
             {"file": upload},
             format="multipart",
         )
+        force_authenticate(request, user=self.user)
 
         response = self.view(request)
 

@@ -3,7 +3,7 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from queries.views import QueryAPIView
 
@@ -12,6 +12,8 @@ class QueryAPIViewTests(SimpleTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = QueryAPIView.as_view()
+        self.user = mock.Mock()
+        self.user.is_authenticated = True
 
     @mock.patch("queries.views.generate_response")
     @mock.patch("queries.views.build_prompt")
@@ -27,6 +29,7 @@ class QueryAPIViewTests(SimpleTestCase):
         mock_generate.return_value = iter(["Answer", " is", " yes."])
 
         request = self.factory.post("/api/queries/", {"question": "Is it covered?"})
+        force_authenticate(request, user=self.user)
         response = self.view(request)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -46,6 +49,7 @@ class QueryAPIViewTests(SimpleTestCase):
         mock_build_prompt.return_value = None
 
         request = self.factory.post("/api/queries/", {"question": "Is it covered?"})
+        force_authenticate(request, user=self.user)
         response = self.view(request)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -69,6 +73,7 @@ class QueryAPIViewTests(SimpleTestCase):
             "/api/queries/",
             {"question": "Is it covered?", "document_id": "11111111-1111-1111-1111-111111111111"},
         )
+        force_authenticate(request, user=self.user)
         response = self.view(request)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -91,6 +96,7 @@ class QueryAPIViewTests(SimpleTestCase):
         mock_generate.return_value = iter(["Yes"])
 
         request = self.factory.post("/api/queries/", {"question": "Is it covered?"})
+        force_authenticate(request, user=self.user)
         response = self.view(request)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
