@@ -122,4 +122,10 @@ All Phase 1 steps were already implemented and committed on main before the feat
 - Added `anthropic==0.105.2` to `requirements.txt`
 - Wrote tests first (TDD): dispatch routing, Anthropic streaming, and Anthropic failure handling
 
+### [Phase4.5] README
+- Wrote `README.md` with problem statement, RAG explanation, and text-based architecture diagram
+- Included step-by-step Ollama setup instructions and single-config Anthropic swap guide
+- Documented known limitations (chunking, PDF extraction, negation retrieval)
+- Outlined production upgrade path: embeddings swap, hosted vector DB, authentication
+
 

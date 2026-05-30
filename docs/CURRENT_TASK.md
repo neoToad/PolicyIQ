@@ -1,13 +1,15 @@
 # Current Task
 
-**Step 4.4 — LLM Config Swap**
+**Step 4.5 — README**
 
-Adding a configurable LLM backend so PolicyIQ can switch between Ollama (local, free) and Anthropic API (production demo) with a single settings change.
+Writing the README.md for PolicyIQ.
 
-- Add `LLM_BACKEND` setting (`ollama` or `anthropic`) and `ANTHROPIC_API_KEY` from env
-- Update `queries/services/generator.py` to route based on `LLM_BACKEND`
-- Build Anthropic streaming generator using `claude-sonnet-4-20250514`
-- Both backends consume the same `build_prompt()` output and yield streamed tokens
-- Writing tests first per TDD workflow
+- Plain-English problem statement for non-technical hiring managers
+- Brief RAG explanation and why it's the right approach
+- Text-based architecture diagram (ingestion + query pipelines)
+- Step-by-step local setup using Ollama (free, no API key)
+- Instructions for swapping to Anthropic API for a production demo
+- Known limitations: chunking tradeoffs, PDF extraction messiness, retrieval gaps on negation
+- Production upgrade path: embeddings swap, hosted vector DB, authentication
 
-Next: 4.5 — README.
+Next: Finalize build, push branch.
