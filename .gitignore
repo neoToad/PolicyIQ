@@ -23,9 +23,13 @@ media/
 staticfiles/
 policyiq/chroma/
 
+# Sample/test documents at repo root
+/documents/
+
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Test / coverage
 .pytest_cache/
