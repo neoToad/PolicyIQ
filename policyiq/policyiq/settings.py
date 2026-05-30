@@ -1,14 +1,23 @@
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv()
 
-SECRET_KEY = 'django-insecure-change-me'
-DEBUG = True
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "django-insecure-change-me")
+DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() in ("true", "1", "yes")
+
+# Fail loudly if the insecure scaffold key is used in production.
+if not DEBUG and SECRET_KEY.startswith("django-insecure-"):
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set to a cryptographically random value in production. "
+        "Set the DJANGO_SECRET_KEY environment variable."
+    )
 ALLOWED_HOSTS: list[str] = []
 
 INSTALLED_APPS = [

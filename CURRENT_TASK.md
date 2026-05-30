@@ -1,7 +1,7 @@
 # Current Task
 
-**Step**: 1.1 — Remove committed `.env` from git history
+**Step**: 1.2 — Replace hard-coded `SECRET_KEY`
 **Status**: Starting
-**What I'm doing**: Untracking `policyiq/.env` from git, verifying `.gitignore` rules, and addressing the committed credentials
-**Blockers/Decisions**: Need to assess whether `git filter-repo` is needed (depends on remote push history)
-**Next step**: 1.2 — Replace hard-coded `SECRET_KEY`
+**What I'm doing**: Reading `DJANGO_SECRET_KEY` from environment, failing loudly in production if missing or still the scaffold default
+**Blockers/Decisions**: None
+**Next step**: 1.3 — Add API authentication

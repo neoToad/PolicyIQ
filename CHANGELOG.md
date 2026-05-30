@@ -8,3 +8,11 @@
 - Fixed `.gitignore` — removed overly broad `documents/` pattern that would ignore the Django app
 - Added `/documents/` (root-anchored) to ignore repo-root sample PDFs without ignoring `policyiq/documents/`
 - **Deviation from spec**: `git filter-repo` not needed since `.env` was never committed; password rotation is a manual step for the user to perform
+
+## [Phase1.2] Replace hard-coded `SECRET_KEY`
+- `SECRET_KEY` now reads from `DJANGO_SECRET_KEY` env var, falls back to scaffold default only for dev
+- `DEBUG` now reads from `DJANGO_DEBUG` env var (default `true` for local dev safety)
+- Production guard: raises `ImproperlyConfigured` if `DEBUG=False` and key starts with `django-insecure-`
+- Added generated secret key to `.env` file
+- Added `DJANGO_SECRET_KEY` and `DJANGO_DEBUG` to `.env.example`
+- **Improvement beyond spec**: Made `DEBUG` env-configurable too (not just `SECRET_KEY`)
