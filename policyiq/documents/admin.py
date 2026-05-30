@@ -6,7 +6,7 @@ from .models import Chunk, Document
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
     list_display = ("name", "page_count", "chunk_count", "uploaded_at")
-    search_fields = ("name", "file_path")
+    search_fields = ("name",)
 
 
 @admin.register(Chunk)

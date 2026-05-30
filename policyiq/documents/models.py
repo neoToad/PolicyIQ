@@ -1,12 +1,19 @@
 import uuid
+from pathlib import PurePath
 
 from django.db import models
+
+
+def _document_upload_path(instance, filename):
+    """Generate a safe upload path, stripping directory components to prevent traversal."""
+    safe_name = PurePath(filename).name
+    return f"documents/{safe_name}"
 
 
 class Document(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    file_path = models.CharField(max_length=1024)
+    file = models.FileField(upload_to=_document_upload_path)
     page_count = models.IntegerField()
     chunk_count = models.IntegerField()
     uploaded_at = models.DateTimeField(auto_now_add=True)

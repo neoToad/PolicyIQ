@@ -1,4 +1,6 @@
-﻿from django.contrib import admin
+from django.conf import settings
+from django.conf.urls.static import static
+from django.contrib import admin
 from django.urls import include, path
 
 from documents.views import (
@@ -23,3 +25,7 @@ urlpatterns = [
     path('documents/<uuid:pk>/delete/', DocumentDeleteView.as_view(), name='document-delete'),
     path('ask/', AskPageView.as_view(), name='ask-page'),
 ]
+
+# Serve media files in development only.
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

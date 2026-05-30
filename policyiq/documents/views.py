@@ -1,7 +1,9 @@
-from pathlib import Path
+from pathlib import PurePath
 
 from django.conf import settings
 from django.contrib.admin.views.decorators import staff_member_required
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils.decorators import method_decorator
@@ -19,27 +21,41 @@ from documents.services.indexer import delete_document, index_document
 
 
 def _save_upload_and_ingest(upload) -> Document:
-    """Save the uploaded PDF to disk and run the full ingestion pipeline."""
-    media_root = Path(getattr(settings, "MEDIA_ROOT", settings.BASE_DIR / "media"))
-    documents_dir = media_root / "documents"
-    documents_dir.mkdir(parents=True, exist_ok=True)
-    file_path = documents_dir / upload.name
+    """Save the uploaded PDF via Django's storage and run the full ingestion pipeline.
 
-    with file_path.open("wb+") as destination:
-        for chunk in upload.chunks():
-            destination.write(chunk)
+    The file is saved to temporary storage first, the pipeline runs, and the
+    Document record is only created after successful ingestion — preventing
+    orphaned database records when extraction fails.
+    """
+    # Strip directory components to prevent path traversal.
+    safe_name = PurePath(upload.name).name
+    temp_path = default_storage.save(f"documents/_tmp_{safe_name}", ContentFile(b""))
 
-    pages = extract_pages(str(file_path))
-    cleaned_pages = clean_pages(pages)
-    chunks = chunk_pages(cleaned_pages)
-    embedded_chunks = embed_chunks(chunks)
+    try:
+        # Write uploaded content to the temp file.
+        with default_storage.open(temp_path, "wb") as f:
+            for chunk in upload.chunks():
+                f.write(chunk)
 
+        full_path = default_storage.path(temp_path)
+        pages = extract_pages(full_path)
+        cleaned_pages = clean_pages(pages)
+        chunks = chunk_pages(cleaned_pages)
+        embedded_chunks = embed_chunks(chunks)
+    except Exception:
+        # Clean up temp file on pipeline failure.
+        if default_storage.exists(temp_path):
+            default_storage.delete(temp_path)
+        raise
+
+    # Pipeline succeeded — create the Document record with the real file.
     document = Document.objects.create(
-        name=upload.name,
-        file_path=str(file_path),
+        name=safe_name,
+        file=temp_path,
         page_count=len(pages),
         chunk_count=len(embedded_chunks),
     )
+
     Chunk.objects.bulk_create(
         [
             Chunk(
@@ -137,7 +153,7 @@ class StaffDocumentReindexView(View):
         delete_document(str(document.id))
 
         # Re-run full pipeline from the stored file
-        pages = extract_pages(document.file_path)
+        pages = extract_pages(document.file.path)
         cleaned_pages = clean_pages(pages)
         chunks = chunk_pages(cleaned_pages)
         embedded_chunks = embed_chunks(chunks)
@@ -163,6 +179,7 @@ class StaffDocumentReindexView(View):
 
 class DocumentUploadAPIView(APIView):
     permission_classes = [IsAuthenticated]
+
     def post(self, request):
         uploads = request.FILES.getlist("file")
         if not uploads:

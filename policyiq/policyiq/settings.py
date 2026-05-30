@@ -87,6 +87,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 CHROMA_PERSIST_DIR = BASE_DIR / 'chroma'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

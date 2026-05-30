@@ -24,3 +24,16 @@
 - Added `permission_classes = [IsAuthenticated]` explicitly on `DocumentUploadAPIView` and `QueryAPIView`
 - Updated all API tests to use `force_authenticate` with a mock user
 - **Improvement beyond spec**: Set default permission globally so any new DRF view is auth-protected by default
+
+## [Phase1.4+2.1] Fix path traversal + Replace CharField with FileField
+- Replaced `Document.file_path` (CharField) with `Document.file` (FileField with `upload_to` callback)
+- `_document_upload_path()` strips directory components using `PurePath.name` to prevent path traversal
+- Restructured `_save_upload_and_ingest()` to save file via Django's `default_storage` first, run pipeline, then create Document record only on success — prevents orphaned DB records on pipeline failure
+- Added `MEDIA_ROOT` and `MEDIA_URL` to settings (also satisfies Phase 2.7)
+- Added media URL pattern in `urls.py` for development serving
+- Created data migrations (0002-0005) to transition from `file_path` to `file`
+- Migration 0004 deletes orphaned documents whose files no longer exist on disk
+- Updated admin to remove `file_path` from `search_fields`
+- Updated all test mock objects to use `file` attribute and `default_storage` mocks
+- Updated test documents to have proper `uploaded_at` datetime attributes
+- **Improvement beyond spec**: Temp file cleanup on pipeline failure; Document record only created after successful ingestion; `PurePath.name` for safer path sanitization
