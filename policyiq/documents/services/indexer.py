@@ -12,7 +12,7 @@ def get_collection(collection_name: str = "policyiq"):
     return client.get_or_create_collection(name=collection_name)
 
 
-def index_document(document_id: str, chunks: list[dict]) -> int:
+def index_document(document_id: str, chunks: list[dict], document_name: str = "") -> int:
     collection = get_collection()
     ids = [f"{document_id}:{chunk['token_offset']}" for chunk in chunks]
     embeddings = [chunk["embedding"] for chunk in chunks]
@@ -20,6 +20,7 @@ def index_document(document_id: str, chunks: list[dict]) -> int:
     metadatas = [
         {
             "document_id": document_id,
+            "document_name": document_name,
             "page_number": chunk["page_number"],
             "token_offset": chunk["token_offset"],
         }

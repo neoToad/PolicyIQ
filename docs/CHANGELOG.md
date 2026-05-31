@@ -69,6 +69,14 @@
 - Added `documents/tests/test_serializers.py` and `queries/tests/test_serializers.py` per AGENTS.md convention
 - **Improvement beyond spec**: `QueryRequestSerializer` uses `allow_blank=False` and `trim_whitespace=True` for stricter question validation; UUID `document_id` is coerced to string before passing to `retrieve_chunks` to match its type hint
 
+## [Phase2.5] Decouple retriever.py from documents.models
+- Added `document_name` to ChromaDB metadata in `index_document()` so the retriever never needs to query PostgreSQL for document names
+- Removed `from documents.models import Document` from `queries/services/retriever.py` — the `queries` app is now fully decoupled from the `documents` ORM
+- `retrieve_chunks()` now reads `document_name` directly from ChromaDB metadata, falling back to "Unknown"
+- Updated `pipeline.py` to pass `document.name` into `index_document()`
+- Updated indexer and retriever tests to reflect the new metadata shape and removed `Document.objects.filter` mocks
+- **Improvement beyond spec**: Cleaner cross-app boundary — the `queries` app now depends only on `documents.services` (embedder/indexer), not on `documents.models`
+
 ## [Phase2.4] De-duplicate citation construction
 - Created `queries/services/citations.py` with `build_citations(chunks)` helper
 - Replaced duplicated list-comprehensions in `AskPageView.post()` and `QueryAPIView.post()` with calls to `build_citations()`

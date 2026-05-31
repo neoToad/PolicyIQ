@@ -154,7 +154,7 @@ class IndexerTests(SimpleTestCase):
             },
         ]
 
-        count = index_document("doc-123", chunks)
+        count = index_document("doc-123", chunks, document_name="Test Policy.pdf")
 
         self.assertEqual(count, 2)
         mock_collection.add.assert_called_once_with(
@@ -162,8 +162,8 @@ class IndexerTests(SimpleTestCase):
             embeddings=[[0.1, 0.2], [0.3, 0.4]],
             documents=["chunk one", "chunk two"],
             metadatas=[
-                {"document_id": "doc-123", "page_number": 1, "token_offset": 0},
-                {"document_id": "doc-123", "page_number": 2, "token_offset": 128},
+                {"document_id": "doc-123", "document_name": "Test Policy.pdf", "page_number": 1, "token_offset": 0},
+                {"document_id": "doc-123", "document_name": "Test Policy.pdf", "page_number": 2, "token_offset": 128},
             ],
         )
 

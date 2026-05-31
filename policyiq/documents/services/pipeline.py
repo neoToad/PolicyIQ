@@ -40,7 +40,7 @@ def ingest_document(document, file_path: str | None = None) -> dict:
             for chunk in embedded_chunks
         ]
     )
-    index_document(str(document.id), embedded_chunks)
+    index_document(str(document.id), embedded_chunks, document_name=document.name)
 
     return {
         "pages": pages,

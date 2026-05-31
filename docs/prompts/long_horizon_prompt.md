@@ -8,7 +8,7 @@ The prompt plan is your implementation spec — execute every prompt in it, in o
 ## Git Setup (do this first)
 
 1. If a branch named `feature/policyiq-build` does not exist, create it from main and check it out.
-2. After completing each numbered step in the prompt plan (1.1, 1.2, 1.3, etc.), stage all new and modified files and commit before moving to the next step.
+2. After completing each numbered step in the prompt plan (1.1, 1.2, 1.3, etc.), stage all new and modified files, commit, and push.
 3. Use this commit message format: `[PhaseX.Y] Short description of what was built`
 
 ---
@@ -54,7 +54,7 @@ As you build, use your judgment to refactor and add sensible improvements beyond
 
 ## Rules
 
-- Complete, commit, and push each step before starting the next.
+- Complete, commit, and push to remote each step before starting the next.
 - If a step produces errors, fix them before moving on. Do not proceed on broken code.
 - Do not batch multiple steps into one commit.
 - Always commit CURRENT_TASK.md and CHANGELOG.md alongside the step's code files.

@@ -49,11 +49,10 @@ class BuildCitationsTests(SimpleTestCase):
 
 
 class RetrieveChunksTests(SimpleTestCase):
-    @mock.patch("queries.services.retriever.Document.objects.filter")
     @mock.patch("queries.services.retriever.get_collection")
     @mock.patch("queries.services.retriever.embed_query")
     def test_retrieve_chunks_returns_ordered_results_with_scores(
-        self, mock_embed_query, mock_get_collection, mock_doc_filter
+        self, mock_embed_query, mock_get_collection
     ):
         mock_embed_query.return_value = [0.1, 0.2, 0.3]
         mock_collection = mock.Mock()
@@ -62,17 +61,13 @@ class RetrieveChunksTests(SimpleTestCase):
             "documents": [["first chunk text", "second chunk text"]],
             "metadatas": [
                 [
-                    {"document_id": "doc-1", "page_number": 1, "token_offset": 0},
-                    {"document_id": "doc-1", "page_number": 2, "token_offset": 50},
+                    {"document_id": "doc-1", "document_name": "Test Policy.pdf", "page_number": 1, "token_offset": 0},
+                    {"document_id": "doc-1", "document_name": "Test Policy.pdf", "page_number": 2, "token_offset": 50},
                 ]
             ],
             "distances": [[0.2, 0.5]],
         }
         mock_get_collection.return_value = mock_collection
-        mock_doc = mock.Mock()
-        mock_doc.id = "doc-1"
-        mock_doc.name = "Test Policy.pdf"
-        mock_doc_filter.return_value = [mock_doc]
 
         result = retrieve_chunks("test question", top_k=5)
 
@@ -87,25 +82,20 @@ class RetrieveChunksTests(SimpleTestCase):
             query_embeddings=[[0.1, 0.2, 0.3]], n_results=5, where=None
         )
 
-    @mock.patch("queries.services.retriever.Document.objects.filter")
     @mock.patch("queries.services.retriever.get_collection")
     @mock.patch("queries.services.retriever.embed_query")
     def test_retrieve_chunks_filters_by_document_id(
-        self, mock_embed_query, mock_get_collection, mock_doc_filter
+        self, mock_embed_query, mock_get_collection
     ):
         mock_embed_query.return_value = [0.1, 0.2, 0.3]
         mock_collection = mock.Mock()
         mock_collection.query.return_value = {
             "ids": [["doc-1:0"]],
             "documents": [["filtered chunk"]],
-            "metadatas": [[{"document_id": "doc-1", "page_number": 1, "token_offset": 0}]],
+            "metadatas": [[{"document_id": "doc-1", "document_name": "Test Policy.pdf", "page_number": 1, "token_offset": 0}]],
             "distances": [[0.1]],
         }
         mock_get_collection.return_value = mock_collection
-        mock_doc = mock.Mock()
-        mock_doc.id = "doc-1"
-        mock_doc.name = "Test Policy.pdf"
-        mock_doc_filter.return_value = [mock_doc]
 
         result = retrieve_chunks("test question", document_id="doc-1", top_k=1)
 
@@ -116,11 +106,10 @@ class RetrieveChunksTests(SimpleTestCase):
             where={"document_id": "doc-1"},
         )
 
-    @mock.patch("queries.services.retriever.Document.objects.filter")
     @mock.patch("queries.services.retriever.get_collection")
     @mock.patch("queries.services.retriever.embed_query")
     def test_retrieve_chunks_returns_empty_when_no_results(
-        self, mock_embed_query, mock_get_collection, mock_doc_filter
+        self, mock_embed_query, mock_get_collection
     ):
         mock_embed_query.return_value = [0.1, 0.2, 0.3]
         mock_collection = mock.Mock()
@@ -135,7 +124,6 @@ class RetrieveChunksTests(SimpleTestCase):
         result = retrieve_chunks("test question", top_k=5)
 
         self.assertEqual(result, [])
-        mock_doc_filter.assert_not_called()
 
 
 class BuildPromptTests(SimpleTestCase):

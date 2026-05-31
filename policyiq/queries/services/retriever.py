@@ -1,5 +1,4 @@
-﻿from documents.models import Document
-from documents.services.embedder import embed_query
+﻿from documents.services.embedder import embed_query
 from documents.services.indexer import get_collection
 
 
@@ -30,14 +29,9 @@ def retrieve_chunks(query: str, document_id: str = None, top_k: int = 5) -> list
             "text": documents[i],
             "page_number": metadatas[i].get("page_number"),
             "document_id": metadatas[i].get("document_id"),
+            "document_name": metadatas[i].get("document_name", "Unknown"),
             "similarity_score": similarity,
         })
-
-    if chunks:
-        doc_ids = list({c["document_id"] for c in chunks})
-        docs = {str(d.id): d.name for d in Document.objects.filter(id__in=doc_ids)}
-        for c in chunks:
-            c["document_name"] = docs.get(c["document_id"], "Unknown")
 
     chunks.sort(key=lambda c: c["similarity_score"], reverse=True)
     return chunks
