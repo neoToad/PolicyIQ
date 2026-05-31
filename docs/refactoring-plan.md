@@ -251,7 +251,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - After Phase 2.3 (shared pipeline), the view only needs to mock `ingest_document()` instead of 5 individual services
 - This naturally reduces mock depth to ~2 patches per test
 
-### 4.4 Add tests for `AskPageView`
+### 4.4 Add tests for `AskPageView` ✅ COMPLETED
 
 **Problem**: Only `QueryAPIView` has test coverage. The HTMX page view (`AskPageView`) is untested.
 
@@ -345,10 +345,10 @@ These items reduce coupling, enable independent evolution, and fix design proble
 |-------|-------|--------|----------|-----------------|
 | 1 — Security | 7 items | ✅ Complete | Critical | 2-3 days |
 | 2 — Architecture | 7 items | ✅ Complete | High | 3-4 days |
-| 3 — Code Quality | 7 items | 3/7 done | Medium | 2-3 days |
-| 4 — Testing | 6 items | 3/6 done | Medium | 2-3 days |
-| 5 — Operational | 6 items | Not started | Lower | 2-3 days |
-| **Total** | **33 items** | **20/33 done** | | **11-16 days** |
+| 3 — Code Quality | 7 items | ✅ Complete | Medium | 2-3 days |
+| 4 — Testing | 6 items | 4/6 done | Medium | 2-3 days |
+| 5 — Operational | 6 items | 1/6 done | Lower | 2-3 days |
+| **Total** | **33 items** | **26/33 done** | | **11-16 days** |
 
 ---
 

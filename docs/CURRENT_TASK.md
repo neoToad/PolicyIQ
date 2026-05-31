@@ -1,9 +1,9 @@
 # Current Task
 
-**Step**: Batch processing — 3.7 + 4.4–4.6 + 5.1–5.6
-**Status**: Starting
-**What I'm doing**: Running a multi-agent workflow to complete all remaining refactoring steps in parallel batches.
+**Step**: Phase 4.5 — Add integration test scaffolding
+**Status**: In progress
+**What I'm working on**: Creating a `tests/integration/` directory with a basic ingestion + query round-trip test using Django `TestCase` and a test database. Marking with `@pytest.mark.integration` or Django test tags so they can be skipped in fast runs.
 
 **Blockers/Decisions**: None
 
-**Next step**: Synthesize workflow results, verify tests, commit each step.
+**Next step**: Commit 4.5, then proceed to Phase 4.6 (pytest migration).

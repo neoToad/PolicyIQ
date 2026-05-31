@@ -169,3 +169,14 @@
 - Updated test assertions in `test_services.py` files to expect the new exception types
 - All 66 tests pass
 - **Improvement beyond spec**: Hierarchical exception bases (`DocumentError`, `QueryError`) allow callers to catch broad categories or specific failures
+
+## [Phase4.4] Add tests for AskPageView
+- Added `AskPageViewTests` in `queries/tests/test_views.py` with 6 test cases:
+  - `test_get_renders_form_with_documents`: verifies GET renders ask.html with document selector
+  - `test_post_with_empty_question_returns_400`: verifies blank/whitespace questions return 400 with error message
+  - `test_post_streams_answer_when_chunks_found`: verifies streaming HTML response and correct service call chain
+  - `test_post_returns_message_when_no_relevant_chunks`: verifies non-streaming response when no chunks match
+  - `test_post_passes_document_id_to_retriever`: verifies optional document filter is forwarded to retriever
+  - `test_post_includes_x_citations_header`: verifies X-Citations header contains serialized citation data
+- All 72 tests pass (6 new + 66 existing)
+- **Improvement beyond spec**: None — tests follow existing mock patterns from QueryAPIViewTests
