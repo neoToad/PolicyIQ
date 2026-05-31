@@ -1,9 +1,9 @@
 # Current Task
 
-**Step**: 2.4 — De-duplicate citation construction
+**Step**: 2.5 — Decouple `retriever.py` from `documents.models`
 **Status**: Starting
-**What I'm doing**: Extracting the duplicated `citations` list-comprehension from `AskPageView.post()` and `QueryAPIView.post()` into a shared `build_citations()` helper in `queries/services/`
+**What I'm doing**: Removing the cross-app ORM dependency from `retriever.py` by storing `document_name` in ChromaDB metadata during indexing, so the retriever never needs to query PostgreSQL
 
 **Blockers/Decisions**: None
 
-**Next step**: 2.5 — Decouple `retriever.py` from `documents.models`
+**Next step**: 2.6 — Singleton ChromaDB client
