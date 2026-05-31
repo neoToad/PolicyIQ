@@ -18,7 +18,7 @@ def get_chroma_client() -> chromadb.PersistentClient:
     return chromadb.PersistentClient(path=_get_persist_dir())
 
 
-def get_collection(collection_name: str = "policyiq"):
+def get_collection(collection_name: str = "policyiq") -> chromadb.Collection:
     return get_chroma_client().get_or_create_collection(name=collection_name)
 
 
@@ -46,6 +46,6 @@ def index_document(document_id: str, chunks: list[dict], document_name: str = ""
     return len(chunks)
 
 
-def delete_document(document_id: str):
+def delete_document(document_id: str) -> None:
     collection = get_collection()
     collection.delete(where={"document_id": document_id})

@@ -123,3 +123,16 @@
 - Added test-specific SQLite in-memory database override in `settings.py` so `TestCase` tests run without requiring PostgreSQL `CREATEDB` privileges
 - Removed stray PDF artifacts (`bad.pdf`, `empty.pdf`, `fake.pdf`, `html.pdf`, `notext.pdf`, `tiny.pdf`) from `policyiq/documents/`
 - **Improvement beyond spec**: `ingest_document` returns a detailed result dict (`pages`, `cleaned_pages`, `chunks`, `embedded_chunks`) for potential debugging/monitoring; centralized temp-file and DB cleanup on pipeline failure prevents orphaned records in both upload and reindex paths
+
+## [Phase3.4] Add type hints consistently
+- Added type hints to all public view methods in `documents/views.py` and `queries/views.py` (`HttpRequest`, `Request`, `HttpResponse`, `Response`, `StreamingHttpResponse`)
+- Typed helper parameters `_validate_pdf(upload: UploadedFile)` and `_save_upload_and_ingest(upload: UploadedFile)`
+- Added return types to service functions missing them:
+  - `indexer.get_collection() -> chromadb.Collection`
+  - `indexer.delete_document(document_id: str) -> None`
+  - `generator._generate_ollama() -> Iterator[str]`
+  - `generator._generate_anthropic() -> Iterator[str]`
+  - `generator.generate_response() -> Iterator[str]`
+- Fixed inconsistent default in `retriever.retrieve_chunks(document_id: str | None = None)`
+- All ruff checks pass; all 66 tests pass
+- **Improvement beyond spec**: Used `collections.abc.Iterator` for generator return types (modern Python 3.11 idiom)

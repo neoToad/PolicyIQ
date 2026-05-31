@@ -1,11 +1,12 @@
 import json
 
-from django.http import HttpResponse, StreamingHttpResponse
+from django.http import HttpRequest, HttpResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.views import View
 from documents.models import Document
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -16,11 +17,11 @@ from queries.services.retriever import retrieve_chunks
 
 
 class AskPageView(View):
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         documents = Document.objects.order_by("-uploaded_at")
         return render(request, "queries/ask.html", {"documents": documents})
 
-    def post(self, request):
+    def post(self, request: HttpRequest) -> HttpResponse:
         question = request.POST.get("question", "").strip()
         document_id = request.POST.get("document_id") or None
 
@@ -51,7 +52,7 @@ class AskPageView(View):
 class QueryAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         request_serializer = QueryRequestSerializer(data=request.data)
         if not request_serializer.is_valid():
             return Response(request_serializer.errors, status=status.HTTP_400_BAD_REQUEST)

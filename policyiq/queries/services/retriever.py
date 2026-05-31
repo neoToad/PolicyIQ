@@ -2,7 +2,7 @@ from documents.services.embedder import embed_query
 from documents.services.indexer import get_collection
 
 
-def retrieve_chunks(query: str, document_id: str = None, top_k: int = 5) -> list[dict]:
+def retrieve_chunks(query: str, document_id: str | None = None, top_k: int = 5) -> list[dict]:
     query_embedding = embed_query(query)
     collection = get_collection()
 

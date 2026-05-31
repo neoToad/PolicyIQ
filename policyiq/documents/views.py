@@ -3,12 +3,14 @@ from pathlib import PurePath
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.http import HttpResponse
+from django.core.files.uploadedfile import UploadedFile
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils.decorators import method_decorator
 from django.views import View
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -18,7 +20,7 @@ from documents.services.indexer import delete_document
 from documents.services.pipeline import ingest_document
 
 
-def _validate_pdf(upload) -> str | None:
+def _validate_pdf(upload: UploadedFile) -> str | None:
     """Validate that an uploaded file is a PDF.
 
     Checks the Content-Type header and the PDF magic bytes (%PDF-) at the
@@ -37,7 +39,7 @@ def _validate_pdf(upload) -> str | None:
     return None
 
 
-def _save_upload_and_ingest(upload) -> Document:
+def _save_upload_and_ingest(upload: UploadedFile) -> Document:
     """Save the uploaded PDF via Django's storage and run the full ingestion pipeline.
 
     The file is saved to temporary storage first, a Document record is created,
@@ -81,10 +83,10 @@ def _save_upload_and_ingest(upload) -> Document:
 
 
 class UploadPageView(View):
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         return render(request, "documents/upload.html")
 
-    def post(self, request):
+    def post(self, request: HttpRequest) -> HttpResponse:
         uploads = request.FILES.getlist("file")
         if not uploads:
             return render(
@@ -126,13 +128,13 @@ class UploadPageView(View):
 
 
 class HistoryPageView(View):
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         documents = Document.objects.order_by("-uploaded_at")
         return render(request, "documents/history.html", {"documents": documents})
 
 
 class DocumentDeleteView(View):
-    def delete(self, request, pk):
+    def delete(self, request: HttpRequest, pk: str) -> HttpResponse:
         try:
             document = Document.objects.get(pk=pk)
         except Document.DoesNotExist:
@@ -145,14 +147,14 @@ class DocumentDeleteView(View):
 
 @method_decorator(staff_member_required, name="dispatch")
 class StaffDocumentListView(View):
-    def get(self, request):
+    def get(self, request: HttpRequest) -> HttpResponse:
         documents = Document.objects.order_by("-uploaded_at")
         return render(request, "documents/admin.html", {"documents": documents})
 
 
 @method_decorator(staff_member_required, name="dispatch")
 class StaffDocumentDeleteView(View):
-    def delete(self, request, pk):
+    def delete(self, request: HttpRequest, pk: str) -> HttpResponse:
         try:
             document = Document.objects.get(pk=pk)
         except Document.DoesNotExist:
@@ -165,7 +167,7 @@ class StaffDocumentDeleteView(View):
 
 @method_decorator(staff_member_required, name="dispatch")
 class StaffDocumentReindexView(View):
-    def post(self, request, pk):
+    def post(self, request: HttpRequest, pk: str) -> HttpResponse:
         try:
             document = Document.objects.get(pk=pk)
         except Document.DoesNotExist:
@@ -183,7 +185,7 @@ class StaffDocumentReindexView(View):
 class DocumentUploadAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
+    def post(self, request: Request) -> Response:
         uploads = request.FILES.getlist("file")
         if not uploads:
             return Response(

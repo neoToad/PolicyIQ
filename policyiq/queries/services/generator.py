@@ -1,5 +1,6 @@
 import json
 import time
+from collections.abc import Iterator
 
 import requests
 from django.conf import settings
@@ -15,7 +16,7 @@ RETRY_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 1
 
 
-def _generate_ollama(prompt: str):
+def _generate_ollama(prompt: str) -> Iterator[str]:
     payload = {"model": OLLAMA_GENERATE_MODEL, "prompt": prompt, "stream": True}
     last_error: Exception | None = None
 
@@ -45,7 +46,7 @@ ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
 ANTHROPIC_MAX_TOKENS = 1024
 
 
-def _generate_anthropic(prompt: str):
+def _generate_anthropic(prompt: str) -> Iterator[str]:
     if anthropic is None:
         raise RuntimeError("Anthropic SDK is not installed. Install it with: pip install anthropic")
     api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
@@ -68,7 +69,7 @@ def _generate_anthropic(prompt: str):
         raise RuntimeError("Anthropic generation service failed. Check your API key and network connection.") from exc
 
 
-def generate_response(prompt: str):
+def generate_response(prompt: str) -> Iterator[str]:
     backend = getattr(settings, "LLM_BACKEND", "ollama")
     if backend == "ollama":
         yield from _generate_ollama(prompt)
