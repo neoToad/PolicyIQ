@@ -1,9 +1,9 @@
 # Current Task
 
-**Step**: 3.3 — Add linting and formatting
+**Step**: 3.4 — Add type hints consistently
 **Status**: Starting
-**What I'm doing**: Running `ruff format` and `ruff check --fix` across the codebase to standardize style, then adding ruff to requirements
+**What I'm doing**: Adding type hints to all public view methods and verifying return types on all service functions
 
 **Blockers/Decisions**: None
 
-**Next step**: 3.4 — Add type hints consistently
+**Next step**: 3.5 — Clean up _upload_result.html legacy branch
