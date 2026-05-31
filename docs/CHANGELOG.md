@@ -190,3 +190,12 @@
 - Temporary `MEDIA_ROOT` and `CHROMA_PERSIST_DIR` prevent pollution of dev data
 - Documented distinction between integration tests (repeatable, auto-cleanup, Django TestCase) and manual smoke scripts (CLI utilities, hard-coded config)
 - **Improvement beyond spec**: Auto-cleanup in `tearDown` purges ChromaDB, PostgreSQL records, and temp directories so tests are idempotent
+
+## [Phase4.6] Consider pytest migration
+- Added `pytest==8.3.5` and `pytest-django==4.10.0` to `requirements.txt`
+- Created `policyiq/conftest.py` with shared fixtures: `api_client`, `authenticated_user`, `staff_user`, `pdf_file`, `mock_document`
+- Updated `pyproject.toml` with `pythonpath = ["policyiq"]` and `testpaths = ["policyiq"]` for pytest-django discovery
+- Created `queries/tests/test_views_pytest.py` as a pytest-style rewrite of `AskPageViewTests` demonstrating coexistence
+- Fixed `settings.py` `_is_test_run()` to detect pytest (via `sys.argv[0]`) so SQLite in-memory DB is used under pytest as well as Django's runner
+- Django runner: 72 unit tests pass in 0.04s; pytest runner: 6 pytest tests pass in 1.3s
+- **Improvement beyond spec**: Unified test-database detection means pytest and Django runner both use SQLite without requiring PostgreSQL `CREATEDB` privileges

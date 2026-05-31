@@ -269,7 +269,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Mark with `@pytest.mark.integration` or a Django test tag so they can be skipped in fast runs
 - Keep the manual smoke scripts for now but document how they differ from integration tests
 
-### 4.6 Consider pytest migration
+### 4.6 Consider pytest migration ✅ COMPLETED
 
 **Problem**: Tests use Django's `SimpleTestCase` with `unittest.mock`. Pytest + `pytest-django` offers better fixtures, parametrization, and plugin ecosystem.
 
@@ -346,9 +346,9 @@ These items reduce coupling, enable independent evolution, and fix design proble
 | 1 — Security | 7 items | ✅ Complete | Critical | 2-3 days |
 | 2 — Architecture | 7 items | ✅ Complete | High | 3-4 days |
 | 3 — Code Quality | 7 items | ✅ Complete | Medium | 2-3 days |
-| 4 — Testing | 6 items | 5/6 done | Medium | 2-3 days |
+| 4 — Testing | 6 items | ✅ Complete | Medium | 2-3 days |
 | 5 — Operational | 6 items | 1/6 done | Lower | 2-3 days |
-| **Total** | **33 items** | **27/33 done** | | **11-16 days** |
+| **Total** | **33 items** | **28/33 done** | | **11-16 days** |
 
 ---
 

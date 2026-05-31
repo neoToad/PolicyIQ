@@ -1,9 +1,9 @@
 # Current Task
 
-**Step**: Phase 4.6 — Consider pytest migration
+**Step**: Phase 5.1 — Add Django logging configuration
 **Status**: In progress
-**What I'm working on**: Adding `pytest` and `pytest-django` to requirements, creating `conftest.py` with shared fixtures, and migrating a subset of existing tests to demonstrate coexistence with Django's unittest runner.
+**What I'm working on**: Adding `LOGGING` dict to `settings.py` with console and file handlers, adding logger calls to services, and ensuring tests silence noisy logs. This work was partially prepared in an earlier stash and is being completed now.
 
 **Blockers/Decisions**: None
 
-**Next step**: Commit 4.6, then proceed to Phase 5.1 (Django logging configuration).
+**Next step**: Apply prior stash with logging changes, verify completeness, commit 5.1, then proceed to Phase 5.3 (health check endpoint).

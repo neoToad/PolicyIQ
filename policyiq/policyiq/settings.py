@@ -76,8 +76,16 @@ DATABASES = {
     }
 }
 
+def _is_test_run() -> bool:
+    """Detect Django's test runner or pytest (pytest does not inject 'test' into sys.argv)."""
+    if "test" in sys.argv:
+        return True
+    # When pytest is invoked directly, sys.argv[0] is the pytest executable path.
+    return bool(sys.argv and "pytest" in sys.argv[0])
+
+
 # Use an in-memory SQLite database for tests so they run without PostgreSQL privileges.
-if "test" in sys.argv:
+if _is_test_run():
     DATABASES["default"] = {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": ":memory:",
