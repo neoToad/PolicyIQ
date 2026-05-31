@@ -17,6 +17,11 @@ dependencies = [
     "tiktoken==0.13.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.15.0",
+]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 120

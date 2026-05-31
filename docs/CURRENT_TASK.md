@@ -1,9 +1,9 @@
 # Current Task
 
-**Step**: 3.2 — Add pyproject.toml
+**Step**: 3.3 — Add linting and formatting
 **Status**: Starting
-**What I'm doing**: Creating `pyproject.toml` at the repo root with project metadata, ruff config, pytest settings, and mypy config
+**What I'm doing**: Running `ruff format` and `ruff check --fix` across the codebase to standardize style, then adding ruff to requirements
 
 **Blockers/Decisions**: None
 
-**Next step**: 3.3 — Add linting and formatting
+**Next step**: 3.4 — Add type hints consistently

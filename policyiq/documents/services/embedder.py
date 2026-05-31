@@ -44,6 +44,5 @@ def _embed_text(text: str) -> list[float]:
                 time.sleep(RETRY_DELAY_SECONDS)
 
     raise RuntimeError(
-        "Ollama embedding service is unreachable after 3 attempts at "
-        "http://localhost:11434/api/embeddings."
+        "Ollama embedding service is unreachable after 3 attempts at http://localhost:11434/api/embeddings."
     ) from last_error

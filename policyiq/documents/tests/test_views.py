@@ -1,4 +1,5 @@
 import tempfile
+from datetime import UTC
 from unittest import mock
 from uuid import uuid4
 
@@ -7,7 +8,6 @@ from django.test import RequestFactory, SimpleTestCase, TestCase, override_setti
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from documents.models import Chunk, Document
 from documents.views import (
     DocumentUploadAPIView,
     StaffDocumentDeleteView,
@@ -28,9 +28,7 @@ class DocumentUploadAPITests(TestCase):
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.views.ingest_document")
     @mock.patch("documents.views.default_storage")
-    def test_upload_pdf_runs_pipeline_and_returns_expected_payload(
-        self, mock_storage, mock_ingest
-    ):
+    def test_upload_pdf_runs_pipeline_and_returns_expected_payload(self, mock_storage, mock_ingest):
         mock_storage.save.return_value = "documents/_tmp_policy.pdf"
         mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
 
@@ -190,8 +188,9 @@ class StaffDocumentListViewTests(SimpleTestCase):
 
     @mock.patch("documents.views.Document.objects.order_by")
     def test_staff_user_sees_document_list(self, mock_order_by):
-        from datetime import datetime, timezone
-        dt = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        from datetime import datetime
+
+        dt = datetime(2026, 1, 1, tzinfo=UTC)
         doc1 = mock.Mock(id=uuid4(), name="a.pdf", page_count=1, chunk_count=2, uploaded_at=dt)
         doc2 = mock.Mock(id=uuid4(), name="b.pdf", page_count=3, chunk_count=4, uploaded_at=dt)
         mock_order_by.return_value = [doc1, doc2]
@@ -238,9 +237,7 @@ class StaffDocumentDeleteViewTests(SimpleTestCase):
 
     @mock.patch("documents.views.delete_document")
     @mock.patch("documents.views.Document.objects.get")
-    def test_staff_delete_removes_document_and_chromadb_chunks(
-        self, mock_get, mock_delete_document
-    ):
+    def test_staff_delete_removes_document_and_chromadb_chunks(self, mock_get, mock_delete_document):
         doc_id = uuid4()
         doc = mock.Mock()
         doc.id = doc_id

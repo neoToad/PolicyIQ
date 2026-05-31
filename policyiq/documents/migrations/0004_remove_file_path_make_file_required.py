@@ -15,7 +15,6 @@ def delete_documents_without_files(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     atomic = False
 
     dependencies = [

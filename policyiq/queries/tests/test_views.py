@@ -1,4 +1,4 @@
-﻿import json
+import json
 from unittest import mock
 
 from django.test import SimpleTestCase
@@ -18,9 +18,7 @@ class QueryAPIViewTests(SimpleTestCase):
     @mock.patch("queries.views.generate_response")
     @mock.patch("queries.views.build_prompt")
     @mock.patch("queries.views.retrieve_chunks")
-    def test_query_returns_streaming_response_when_chunks_found(
-        self, mock_retrieve, mock_build_prompt, mock_generate
-    ):
+    def test_query_returns_streaming_response_when_chunks_found(self, mock_retrieve, mock_build_prompt, mock_generate):
         chunks = [
             {"text": "Coverage yes.", "page_number": 2, "document_name": "Policy.pdf", "similarity_score": 0.85},
         ]
@@ -42,9 +40,7 @@ class QueryAPIViewTests(SimpleTestCase):
     @mock.patch("queries.views.generate_response")
     @mock.patch("queries.views.build_prompt")
     @mock.patch("queries.views.retrieve_chunks")
-    def test_query_returns_json_when_no_relevant_chunks(
-        self, mock_retrieve, mock_build_prompt, mock_generate
-    ):
+    def test_query_returns_json_when_no_relevant_chunks(self, mock_retrieve, mock_build_prompt, mock_generate):
         mock_retrieve.return_value = []
         mock_build_prompt.return_value = None
 
@@ -59,9 +55,7 @@ class QueryAPIViewTests(SimpleTestCase):
     @mock.patch("queries.views.generate_response")
     @mock.patch("queries.views.build_prompt")
     @mock.patch("queries.views.retrieve_chunks")
-    def test_query_passes_document_id_to_retriever(
-        self, mock_retrieve, mock_build_prompt, mock_generate
-    ):
+    def test_query_passes_document_id_to_retriever(self, mock_retrieve, mock_build_prompt, mock_generate):
         chunks = [
             {"text": "Coverage yes.", "page_number": 2, "document_name": "Policy.pdf", "similarity_score": 0.85},
         ]
@@ -84,11 +78,14 @@ class QueryAPIViewTests(SimpleTestCase):
     @mock.patch("queries.views.generate_response")
     @mock.patch("queries.views.build_prompt")
     @mock.patch("queries.views.retrieve_chunks")
-    def test_query_includes_x_citations_header(
-        self, mock_retrieve, mock_build_prompt, mock_generate
-    ):
+    def test_query_includes_x_citations_header(self, mock_retrieve, mock_build_prompt, mock_generate):
         chunks = [
-            {"text": "Coverage is approved for this procedure.", "page_number": 3, "document_name": "Policy.pdf", "similarity_score": 0.92},
+            {
+                "text": "Coverage is approved for this procedure.",
+                "page_number": 3,
+                "document_name": "Policy.pdf",
+                "similarity_score": 0.92,
+            },
             {"text": "PA not needed.", "page_number": 5, "document_name": "Policy.pdf", "similarity_score": 0.78},
         ]
         mock_retrieve.return_value = chunks

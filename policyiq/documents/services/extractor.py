@@ -32,7 +32,7 @@ def clean_pages(pages: list[dict]) -> list[dict]:
     cleaned_pages: list[dict] = []
     repeated_lines = {line for line, count in line_counts.items() if count >= 3}
 
-    for page, lines in zip(pages, page_lines):
+    for page, lines in zip(pages, page_lines, strict=False):
         filtered = []
         for line in lines:
             stripped = line.strip()

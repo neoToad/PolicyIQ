@@ -1,14 +1,14 @@
-﻿import json
+import json
 
 from django.http import HttpResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.views import View
+from documents.models import Document
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from documents.models import Document
 from queries.serializers import CitationSerializer, QueryRequestSerializer
 from queries.services.citations import build_citations
 from queries.services.generator import build_prompt, generate_response
@@ -34,16 +34,13 @@ class AskPageView(View):
         prompt = build_prompt(question, chunks, similarity_threshold=0.5)
 
         if prompt is None:
-            return HttpResponse(
-                "<p>No relevant information found in the uploaded documents.</p>"
-            )
+            return HttpResponse("<p>No relevant information found in the uploaded documents.</p>")
 
         citations = build_citations(chunks)
 
         def stream():
             yield '<div class="card"><p style="white-space: pre-wrap;">'
-            for token in generate_response(prompt):
-                yield token
+            yield from generate_response(prompt)
             yield "</p></div>"
 
         response = StreamingHttpResponse(stream(), content_type="text/html")
@@ -78,8 +75,7 @@ class QueryAPIView(APIView):
         citation_serializer.is_valid(raise_exception=True)
 
         def stream():
-            for token in generate_response(prompt):
-                yield token
+            yield from generate_response(prompt)
 
         response = StreamingHttpResponse(stream(), content_type="text/plain")
         response["X-Citations"] = json.dumps(citation_serializer.data)

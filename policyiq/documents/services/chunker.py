@@ -1,9 +1,7 @@
 import tiktoken
 
 
-def chunk_pages(
-    pages: list[dict], chunk_size: int = 500, overlap: int = 50
-) -> list[dict]:
+def chunk_pages(pages: list[dict], chunk_size: int = 500, overlap: int = 50) -> list[dict]:
     """Create sliding token chunks where each next chunk starts `overlap` tokens before the prior one ends."""
     if chunk_size <= 0:
         raise ValueError("chunk_size must be greater than 0")

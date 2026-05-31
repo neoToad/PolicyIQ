@@ -1,4 +1,4 @@
-﻿import json
+import json
 import time
 
 import requests
@@ -37,8 +37,7 @@ def _generate_ollama(prompt: str):
                 time.sleep(RETRY_DELAY_SECONDS)
 
     raise RuntimeError(
-        "Ollama generation service is unreachable after 3 attempts at "
-        "http://localhost:11434/api/generate."
+        "Ollama generation service is unreachable after 3 attempts at http://localhost:11434/api/generate."
     ) from last_error
 
 
@@ -48,14 +47,10 @@ ANTHROPIC_MAX_TOKENS = 1024
 
 def _generate_anthropic(prompt: str):
     if anthropic is None:
-        raise RuntimeError(
-            "Anthropic SDK is not installed. Install it with: pip install anthropic"
-        )
+        raise RuntimeError("Anthropic SDK is not installed. Install it with: pip install anthropic")
     api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
     if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY is not configured. Set it in your environment or Django settings."
-        )
+        raise RuntimeError("ANTHROPIC_API_KEY is not configured. Set it in your environment or Django settings.")
 
     client = anthropic.Anthropic(api_key=api_key)
     try:
@@ -70,9 +65,7 @@ def _generate_anthropic(prompt: str):
                     if text:
                         yield text
     except Exception as exc:
-        raise RuntimeError(
-            "Anthropic generation service failed. Check your API key and network connection."
-        ) from exc
+        raise RuntimeError("Anthropic generation service failed. Check your API key and network connection.") from exc
 
 
 def generate_response(prompt: str):

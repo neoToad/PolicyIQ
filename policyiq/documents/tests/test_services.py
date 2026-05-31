@@ -103,9 +103,7 @@ class EmbedderTests(SimpleTestCase):
 
     @mock.patch("documents.services.embedder.time.sleep")
     @mock.patch("documents.services.embedder.requests.post")
-    def test_embed_query_raises_clear_error_when_ollama_unreachable(
-        self, mock_post, mock_sleep
-    ):
+    def test_embed_query_raises_clear_error_when_ollama_unreachable(self, mock_post, mock_sleep):
         mock_post.side_effect = requests.RequestException("unreachable")
 
         with self.assertRaisesRegex(RuntimeError, "Ollama"):
@@ -119,13 +117,12 @@ class IndexerTests(SimpleTestCase):
     def setUp(self):
         # Ensure the singleton client cache is cleared between tests.
         from documents.services.indexer import get_chroma_client
+
         get_chroma_client.cache_clear()
 
     @mock.patch("documents.services.indexer.chromadb.PersistentClient")
     @mock.patch("documents.services.indexer.settings")
-    def test_get_collection_uses_persist_dir_and_returns_named_collection(
-        self, mock_settings, mock_persistent_client
-    ):
+    def test_get_collection_uses_persist_dir_and_returns_named_collection(self, mock_settings, mock_persistent_client):
         mock_settings.CHROMA_PERSIST_DIR = "/tmp/chroma"
         mock_collection = mock.Mock()
         mock_client = mock.Mock()
@@ -139,9 +136,7 @@ class IndexerTests(SimpleTestCase):
         mock_client.get_or_create_collection.assert_called_once_with(name="policies")
 
     @mock.patch("documents.services.indexer.get_collection")
-    def test_index_document_adds_all_chunks_with_expected_ids_metadata(
-        self, mock_get_collection
-    ):
+    def test_index_document_adds_all_chunks_with_expected_ids_metadata(self, mock_get_collection):
         mock_collection = mock.Mock()
         mock_get_collection.return_value = mock_collection
         chunks = [

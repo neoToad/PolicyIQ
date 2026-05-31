@@ -1,6 +1,5 @@
 from pathlib import PurePath
 
-from django.conf import settings
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage

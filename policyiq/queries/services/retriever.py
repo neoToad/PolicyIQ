@@ -1,4 +1,4 @@
-﻿from documents.services.embedder import embed_query
+from documents.services.embedder import embed_query
 from documents.services.indexer import get_collection
 
 
@@ -25,13 +25,15 @@ def retrieve_chunks(query: str, document_id: str = None, top_k: int = 5) -> list
         #   cosine_similarity = 1 - (squared_l2_distance / 2)
         raw_distance = distances[i]
         similarity = max(0.0, round(1 - raw_distance / 2, 4))
-        chunks.append({
-            "text": documents[i],
-            "page_number": metadatas[i].get("page_number"),
-            "document_id": metadatas[i].get("document_id"),
-            "document_name": metadatas[i].get("document_name", "Unknown"),
-            "similarity_score": similarity,
-        })
+        chunks.append(
+            {
+                "text": documents[i],
+                "page_number": metadatas[i].get("page_number"),
+                "document_id": metadatas[i].get("document_id"),
+                "document_name": metadatas[i].get("document_name", "Unknown"),
+                "similarity_score": similarity,
+            }
+        )
 
     chunks.sort(key=lambda c: c["similarity_score"], reverse=True)
     return chunks

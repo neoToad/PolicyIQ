@@ -6,7 +6,6 @@ import documents.models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("documents", "0004_remove_file_path_make_file_required"),
     ]

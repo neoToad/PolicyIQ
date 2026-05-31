@@ -9,8 +9,8 @@ import django
 
 django.setup()
 
-from queries.services.generator import build_prompt, generate_response
-from queries.services.retriever import retrieve_chunks
+from queries.services.generator import build_prompt, generate_response  # noqa: E402
+from queries.services.retriever import retrieve_chunks  # noqa: E402
 
 # --- Configuration ---
 QUESTION = "What is the main contribution of this paper?"

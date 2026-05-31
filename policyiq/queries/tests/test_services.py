@@ -1,10 +1,10 @@
-﻿from unittest import mock
+from unittest import mock
 
 import requests
 from django.test import SimpleTestCase, override_settings
 
 from queries.services.citations import build_citations
-from queries.services.generator import _generate_anthropic, _generate_ollama, build_prompt, generate_response
+from queries.services.generator import _generate_anthropic, build_prompt, generate_response
 from queries.services.retriever import retrieve_chunks
 
 
@@ -29,7 +29,9 @@ class BuildCitationsTests(SimpleTestCase):
         self.assertEqual(citations[0]["document_name"], "Policy A.pdf")
         self.assertEqual(citations[0]["page_number"], 3)
         self.assertEqual(citations[0]["similarity_score"], 0.85)
-        self.assertEqual(citations[0]["text_preview"], "This is a long chunk of text that should be truncated for the preview."[:150])
+        self.assertEqual(
+            citations[0]["text_preview"], "This is a long chunk of text that should be truncated for the preview."[:150]
+        )
         self.assertEqual(citations[1]["text_preview"], "Short.")
 
     def test_build_citations_defaults_to_unknown_document_name(self):
@@ -51,9 +53,7 @@ class BuildCitationsTests(SimpleTestCase):
 class RetrieveChunksTests(SimpleTestCase):
     @mock.patch("queries.services.retriever.get_collection")
     @mock.patch("queries.services.retriever.embed_query")
-    def test_retrieve_chunks_returns_ordered_results_with_scores(
-        self, mock_embed_query, mock_get_collection
-    ):
+    def test_retrieve_chunks_returns_ordered_results_with_scores(self, mock_embed_query, mock_get_collection):
         mock_embed_query.return_value = [0.1, 0.2, 0.3]
         mock_collection = mock.Mock()
         mock_collection.query.return_value = {
@@ -78,21 +78,19 @@ class RetrieveChunksTests(SimpleTestCase):
         self.assertEqual(result[0]["document_name"], "Test Policy.pdf")
         self.assertEqual(result[0]["similarity_score"], 0.9)
         self.assertEqual(result[1]["similarity_score"], 0.75)
-        mock_collection.query.assert_called_once_with(
-            query_embeddings=[[0.1, 0.2, 0.3]], n_results=5, where=None
-        )
+        mock_collection.query.assert_called_once_with(query_embeddings=[[0.1, 0.2, 0.3]], n_results=5, where=None)
 
     @mock.patch("queries.services.retriever.get_collection")
     @mock.patch("queries.services.retriever.embed_query")
-    def test_retrieve_chunks_filters_by_document_id(
-        self, mock_embed_query, mock_get_collection
-    ):
+    def test_retrieve_chunks_filters_by_document_id(self, mock_embed_query, mock_get_collection):
         mock_embed_query.return_value = [0.1, 0.2, 0.3]
         mock_collection = mock.Mock()
         mock_collection.query.return_value = {
             "ids": [["doc-1:0"]],
             "documents": [["filtered chunk"]],
-            "metadatas": [[{"document_id": "doc-1", "document_name": "Test Policy.pdf", "page_number": 1, "token_offset": 0}]],
+            "metadatas": [
+                [{"document_id": "doc-1", "document_name": "Test Policy.pdf", "page_number": 1, "token_offset": 0}]
+            ],
             "distances": [[0.1]],
         }
         mock_get_collection.return_value = mock_collection
@@ -108,9 +106,7 @@ class RetrieveChunksTests(SimpleTestCase):
 
     @mock.patch("queries.services.retriever.get_collection")
     @mock.patch("queries.services.retriever.embed_query")
-    def test_retrieve_chunks_returns_empty_when_no_results(
-        self, mock_embed_query, mock_get_collection
-    ):
+    def test_retrieve_chunks_returns_empty_when_no_results(self, mock_embed_query, mock_get_collection):
         mock_embed_query.return_value = [0.1, 0.2, 0.3]
         mock_collection = mock.Mock()
         mock_collection.query.return_value = {
@@ -128,9 +124,7 @@ class RetrieveChunksTests(SimpleTestCase):
 
 class BuildPromptTests(SimpleTestCase):
     def test_build_prompt_returns_none_when_no_chunk_meets_threshold(self):
-        chunks = [
-            {"text": "low relevance", "page_number": 1, "document_name": "A.pdf", "similarity_score": 0.3}
-        ]
+        chunks = [{"text": "low relevance", "page_number": 1, "document_name": "A.pdf", "similarity_score": 0.3}]
         result = build_prompt("question?", chunks, similarity_threshold=0.5)
         self.assertIsNone(result)
 
@@ -140,7 +134,12 @@ class BuildPromptTests(SimpleTestCase):
 
     def test_build_prompt_includes_context_and_question(self):
         chunks = [
-            {"text": "Coverage is approved.", "page_number": 3, "document_name": "Policy A.pdf", "similarity_score": 0.85},
+            {
+                "text": "Coverage is approved.",
+                "page_number": 3,
+                "document_name": "Policy A.pdf",
+                "similarity_score": 0.85,
+            },
             {"text": "PA required.", "page_number": 5, "document_name": "Policy A.pdf", "similarity_score": 0.72},
         ]
         prompt = build_prompt("Is prior auth needed?", chunks, similarity_threshold=0.5)
@@ -194,9 +193,7 @@ class GenerateResponseTests(SimpleTestCase):
 
     @mock.patch("queries.services.generator.time.sleep")
     @mock.patch("queries.services.generator.requests.post")
-    def test_generate_response_raises_clear_error_when_ollama_unreachable(
-        self, mock_post, mock_sleep
-    ):
+    def test_generate_response_raises_clear_error_when_ollama_unreachable(self, mock_post, mock_sleep):
         mock_post.side_effect = requests.RequestException("unreachable")
 
         with self.assertRaisesRegex(RuntimeError, "Ollama"):
@@ -236,11 +233,13 @@ class AnthropicGenerationTests(SimpleTestCase):
         mock_settings.ANTHROPIC_API_KEY = "test-key"
         mock_stream = mock.Mock()
         mock_stream.__iter__ = mock.Mock(
-            return_value=iter([
-                mock.Mock(type="content_block_delta", delta=mock.Mock(text="Hello")),
-                mock.Mock(type="content_block_delta", delta=mock.Mock(text=" world")),
-                mock.Mock(type="message_stop"),
-            ])
+            return_value=iter(
+                [
+                    mock.Mock(type="content_block_delta", delta=mock.Mock(text="Hello")),
+                    mock.Mock(type="content_block_delta", delta=mock.Mock(text=" world")),
+                    mock.Mock(type="message_stop"),
+                ]
+            )
         )
         mock_client = mock.Mock()
         mock_client.messages.stream.return_value.__enter__ = mock.Mock(return_value=mock_stream)

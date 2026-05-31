@@ -15,11 +15,7 @@ def summarize_step(step_name: str, pages: list[dict], chunks: list[dict]) -> Non
     page_count = len(pages)
     chunk_count = len(chunks)
     avg_chunk_len = mean(len(chunk.get("text", "")) for chunk in chunks) if chunks else 0.0
-    first_chunk_preview = (
-        chunks[0].get("text", "")[:CHUNK_PREVIEW_CHARS].replace("\n", " ")
-        if chunks
-        else "N/A"
-    )
+    first_chunk_preview = chunks[0].get("text", "")[:CHUNK_PREVIEW_CHARS].replace("\n", " ") if chunks else "N/A"
 
     print(f"\n[{step_name}]")
     print(f"page_count={page_count}")
@@ -44,8 +40,7 @@ def validate_embeddings(chunks: list[dict], expected_dim: int) -> None:
     if bad_indexes:
         sample = ", ".join(str(i) for i in bad_indexes[:10])
         raise RuntimeError(
-            f"Embedding validation failed for {len(bad_indexes)} chunk(s). "
-            f"Example chunk indexes: {sample}"
+            f"Embedding validation failed for {len(bad_indexes)} chunk(s). Example chunk indexes: {sample}"
         )
 
     print(

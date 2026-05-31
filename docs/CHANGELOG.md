@@ -69,6 +69,16 @@
 - Added `documents/tests/test_serializers.py` and `queries/tests/test_serializers.py` per AGENTS.md convention
 - **Improvement beyond spec**: `QueryRequestSerializer` uses `allow_blank=False` and `trim_whitespace=True` for stricter question validation; UUID `document_id` is coerced to string before passing to `retrieve_chunks` to match its type hint
 
+## [Phase3.3] Add linting and formatting
+- Added `ruff` to `[project.optional-dependencies] dev` in `pyproject.toml`
+- Ran `ruff format policyiq` across the entire codebase — 27 files reformatted
+- Ran `ruff check --fix policyiq` — 13 auto-fixed, 5 manually fixed:
+  - `extractor.py`: added `strict=False` to `zip()` (B905)
+  - `queries/views.py`: replaced `for ... yield` loops with `yield from` (UP028, x2)
+  - `test_query.py`: added `# noqa: E402` for imports after `django.setup()`
+- All ruff checks now pass cleanly
+- **Improvement beyond spec**: Enabled `B` (bugbear), `C4` (comprehensions), and `SIM` (simplify) rules in addition to the spec's E/F/W/I/UP for deeper code quality
+
 ## [Phase3.2] Add pyproject.toml
 - Created `pyproject.toml` at repo root with `[project]` metadata (name, version, dependencies)
 - Added `[tool.ruff]` config: target Python 3.11, line length 120, rules E/F/W/I/UP/B/C4/SIM
