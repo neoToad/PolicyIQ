@@ -1,7 +1,7 @@
 # Current Task
 
-**Step**: 1.7 — Review CSRF on API views
+**Step**: 2.2 — Add DRF Serializers
 **Status**: Starting
-**What I'm doing**: Verifying that DRF session auth CSRF is handled correctly, checking the HTMX `htmx:configRequest` CSRF token handler, and documenting the token-auth choice
-**Blockers/Decisions**: None
-**Next step**: 2.2 — Add DRF Serializers
+**What I'm doing**: Creating DocumentSerializer, ChunkSerializer, QueryRequestSerializer, and QueryResponseSerializer to replace manual JSON construction in API views
+**Blockers/Decisions**: Need to decide serializer field boundaries (e.g., whether to include file URL in DocumentSerializer)
+**Next step**: 2.3 — Extract shared ingestion pipeline

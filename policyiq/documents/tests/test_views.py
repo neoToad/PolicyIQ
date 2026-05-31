@@ -403,3 +403,31 @@ class CORSTests(SimpleTestCase):
         )
         self.assertIn("Access-Control-Allow-Origin", response)
         self.assertEqual(response["Access-Control-Allow-Origin"], "http://localhost:3000")
+
+
+class CSRFTests(SimpleTestCase):
+    def test_upload_page_rejects_post_without_csrf_token(self):
+        """Django's CsrfViewMiddleware must block POSTs missing the CSRF token."""
+        from django.test import Client
+
+        client = Client(enforce_csrf_checks=True)
+        response = client.post("/upload/")
+        self.assertEqual(response.status_code, 403)
+
+    @mock.patch("rest_framework.authentication.TokenAuthentication.authenticate")
+    def test_api_upload_with_token_auth_bypasses_csrf(self, mock_auth):
+        """DRF TokenAuthentication must not require a CSRF token."""
+        from django.test import Client
+
+        mock_user = mock.Mock()
+        mock_user.is_authenticated = True
+        mock_auth.return_value = (mock_user, None)
+
+        client = Client(enforce_csrf_checks=True)
+        response = client.post(
+            "/api/documents/upload/",
+            HTTP_AUTHORIZATION="Token faketoken",
+        )
+        # Token auth bypasses CSRF → we get 400 (missing file), not 403 (CSRF failure).
+        self.assertEqual(response.status_code, 400)
+        mock_auth.assert_called_once()

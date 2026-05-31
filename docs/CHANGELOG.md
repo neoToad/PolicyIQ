@@ -52,3 +52,11 @@
 - Configured `CORS_ALLOWED_ORIGINS` from `CORS_ALLOWED_ORIGINS` env var with sensible local-dev defaults (`http://localhost:3000`, `http://127.0.0.1:3000`)
 - Added `CORSTests` verifying preflight OPTIONS and GET responses include `Access-Control-Allow-Origin` headers
 - **Improvement beyond spec**: Env-var configurability for allowed origins; tests cover both preflight and actual request paths
+
+## [Phase1.7] Review CSRF on API views
+- Verified HTMX `htmx:configRequest` handler injects `X-CSRFToken` in `base.html`
+- Verified DRF `SessionAuthentication` enforces CSRF automatically; `TokenAuthentication` bypasses it
+- Added `CSRFTests` proving:
+  - UploadPageView POST without CSRF token returns 403
+  - API POST with TokenAuthentication succeeds without CSRF token
+- **Improvement beyond spec**: Explicit test coverage for CSRF behavior; documented the token-auth choice in test docstrings
