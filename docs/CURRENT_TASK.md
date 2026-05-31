@@ -1,9 +1,9 @@
 # Current Task
 
-**Step**: Phase 4.5 — Add integration test scaffolding
+**Step**: Phase 4.6 — Consider pytest migration
 **Status**: In progress
-**What I'm working on**: Creating a `tests/integration/` directory with a basic ingestion + query round-trip test using Django `TestCase` and a test database. Marking with `@pytest.mark.integration` or Django test tags so they can be skipped in fast runs.
+**What I'm working on**: Adding `pytest` and `pytest-django` to requirements, creating `conftest.py` with shared fixtures, and migrating a subset of existing tests to demonstrate coexistence with Django's unittest runner.
 
 **Blockers/Decisions**: None
 
-**Next step**: Commit 4.5, then proceed to Phase 4.6 (pytest migration).
+**Next step**: Commit 4.6, then proceed to Phase 5.1 (Django logging configuration).

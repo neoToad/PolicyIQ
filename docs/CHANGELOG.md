@@ -180,3 +180,13 @@
   - `test_post_includes_x_citations_header`: verifies X-Citations header contains serialized citation data
 - All 72 tests pass (6 new + 66 existing)
 - **Improvement beyond spec**: None — tests follow existing mock patterns from QueryAPIViewTests
+
+## [Phase4.5] Add integration test scaffolding
+- Created `tests/integration/test_integration.py` with `IngestionQueryRoundTripTests`
+- Integration test creates a real PDF via PyMuPDF, ingests it through the full pipeline (extract → clean → chunk → embed → index), then queries via `retrieve_chunks` and verifies relevant chunks are returned
+- Tagged with `@tag("integration")` and guarded by `skipUnless(_ollama_available(), ...)` so tests are skipped when Ollama is unreachable
+- Fast unit-test run excludes integration tests: `72 tests in 0.05s`
+- Integration test run with real services: `1 test in 4.7s`
+- Temporary `MEDIA_ROOT` and `CHROMA_PERSIST_DIR` prevent pollution of dev data
+- Documented distinction between integration tests (repeatable, auto-cleanup, Django TestCase) and manual smoke scripts (CLI utilities, hard-coded config)
+- **Improvement beyond spec**: Auto-cleanup in `tearDown` purges ChromaDB, PostgreSQL records, and temp directories so tests are idempotent

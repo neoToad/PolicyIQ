@@ -259,7 +259,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Add test cases for GET (form rendering), POST (streaming response), and error paths
 - Test HTMX-specific behavior (partial rendering, streaming)
 
-### 4.5 Add integration test scaffolding
+### 4.5 Add integration test scaffolding ✅ COMPLETED
 
 **Problem**: No integration tests exist. All tests are fully mocked unit tests. The standalone smoke test scripts are manual.
 
@@ -346,9 +346,9 @@ These items reduce coupling, enable independent evolution, and fix design proble
 | 1 — Security | 7 items | ✅ Complete | Critical | 2-3 days |
 | 2 — Architecture | 7 items | ✅ Complete | High | 3-4 days |
 | 3 — Code Quality | 7 items | ✅ Complete | Medium | 2-3 days |
-| 4 — Testing | 6 items | 4/6 done | Medium | 2-3 days |
+| 4 — Testing | 6 items | 5/6 done | Medium | 2-3 days |
 | 5 — Operational | 6 items | 1/6 done | Lower | 2-3 days |
-| **Total** | **33 items** | **26/33 done** | | **11-16 days** |
+| **Total** | **33 items** | **27/33 done** | | **11-16 days** |
 
 ---
 
