@@ -3,7 +3,7 @@ from unittest import mock
 from uuid import uuid4
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import RequestFactory, SimpleTestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, TestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -17,7 +17,7 @@ from documents.views import (
 )
 
 
-class DocumentUploadAPITests(SimpleTestCase):
+class DocumentUploadAPITests(TestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         self.view = DocumentUploadAPIView.as_view()
@@ -26,64 +26,20 @@ class DocumentUploadAPITests(SimpleTestCase):
         self.user.is_staff = False
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
-    @mock.patch("documents.views.Chunk.objects.bulk_create")
-    @mock.patch("documents.views.Document.objects.create")
-    @mock.patch("documents.views.index_document")
-    @mock.patch("documents.views.embed_chunks")
-    @mock.patch("documents.views.chunk_pages")
-    @mock.patch("documents.views.clean_pages")
-    @mock.patch("documents.views.extract_pages")
+    @mock.patch("documents.views.ingest_document")
     @mock.patch("documents.views.default_storage")
     def test_upload_pdf_runs_pipeline_and_returns_expected_payload(
-        self,
-        mock_storage,
-        mock_extract_pages,
-        mock_clean_pages,
-        mock_chunk_pages,
-        mock_embed_chunks,
-        mock_index_document,
-        mock_create_document,
-        mock_bulk_create_chunks,
+        self, mock_storage, mock_ingest
     ):
-        # Set up storage mocks
         mock_storage.save.return_value = "documents/_tmp_policy.pdf"
         mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
-        fake_document = Document(
-            id=uuid4(),
-            name="policy.pdf",
-            page_count=2,
-            chunk_count=2,
-        )
-        mock_create_document.return_value = fake_document
 
-        mock_extract_pages.return_value = [
-            {"page_number": 1, "raw_text": "raw one"},
-            {"page_number": 2, "raw_text": "raw two"},
-        ]
-        mock_clean_pages.return_value = [
-            {"page_number": 1, "raw_text": "raw one", "cleaned_text": "clean one"},
-            {"page_number": 2, "raw_text": "raw two", "cleaned_text": "clean two"},
-        ]
-        mock_chunk_pages.return_value = [
-            {"text": "chunk one", "page_number": 1, "token_offset": 0},
-            {"text": "chunk two", "page_number": 2, "token_offset": 500},
-        ]
-        embedded_chunks = [
-            {
-                "text": "chunk one",
-                "page_number": 1,
-                "token_offset": 0,
-                "embedding": [0.1, 0.2],
-            },
-            {
-                "text": "chunk two",
-                "page_number": 2,
-                "token_offset": 500,
-                "embedding": [0.3, 0.4],
-            },
-        ]
-        mock_embed_chunks.return_value = embedded_chunks
-        mock_index_document.return_value = 2
+        def _ingest_side_effect(document, file_path=None):
+            document.page_count = 2
+            document.chunk_count = 2
+            return {}
+
+        mock_ingest.side_effect = _ingest_side_effect
 
         upload = SimpleUploadedFile(
             "policy.pdf",
@@ -101,22 +57,18 @@ class DocumentUploadAPITests(SimpleTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         result = response.data["results"][0]
-        self.assertEqual(result["document_id"], str(fake_document.id))
         self.assertEqual(result["name"], "policy.pdf")
         self.assertEqual(result["page_count"], 2)
         self.assertEqual(result["chunk_count"], 2)
-        mock_clean_pages.assert_called_once_with(mock_extract_pages.return_value)
-        mock_chunk_pages.assert_called_once_with(mock_clean_pages.return_value)
-        mock_embed_chunks.assert_called_once_with(mock_chunk_pages.return_value)
-        mock_index_document.assert_called_once()
+        mock_ingest.assert_called_once()
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.views.ingest_document")
     @mock.patch("documents.views.default_storage")
-    @mock.patch("documents.views.extract_pages")
-    def test_upload_returns_structured_error_on_pipeline_failure(self, mock_extract_pages, mock_storage):
+    def test_upload_returns_structured_error_on_pipeline_failure(self, mock_storage, mock_ingest):
         mock_storage.save.return_value = "documents/_tmp_broken.pdf"
         mock_storage.path.return_value = "/tmp/media/documents/_tmp_broken.pdf"
-        mock_extract_pages.side_effect = ValueError("Invalid or corrupted PDF")
+        mock_ingest.side_effect = ValueError("Invalid or corrupted PDF")
 
         upload = SimpleUploadedFile(
             "broken.pdf",
@@ -315,55 +267,23 @@ class StaffDocumentReindexViewTests(SimpleTestCase):
         user.is_staff = True
         return user
 
-    @mock.patch("documents.views.index_document")
-    @mock.patch("documents.views.embed_chunks")
-    @mock.patch("documents.views.chunk_pages")
-    @mock.patch("documents.views.clean_pages")
-    @mock.patch("documents.views.extract_pages")
-    @mock.patch("documents.views.Chunk.objects.bulk_create")
+    @mock.patch("documents.views.ingest_document")
+    @mock.patch("documents.views.delete_document")
     @mock.patch("documents.views.Chunk.objects.filter")
     @mock.patch("documents.views.Document.objects.get")
-    def test_staff_reindex_rebuilds_chunks_and_index(
+    def test_staff_reindex_delegates_to_ingest_document(
         self,
         mock_get_document,
         mock_chunk_filter,
-        mock_bulk_create,
-        mock_extract_pages,
-        mock_clean_pages,
-        mock_chunk_pages,
-        mock_embed_chunks,
-        mock_index_document,
+        mock_delete_document,
+        mock_ingest,
     ):
         doc_id = uuid4()
-        doc = Document(id=doc_id, name="reindex.pdf", page_count=2, chunk_count=2)
-        doc.file = mock.Mock()
-        doc.file.path = "/fake/reindex.pdf"
-        doc.save = mock.Mock()
+        doc = mock.Mock()
+        doc.id = doc_id
+        doc.name = "reindex.pdf"
         mock_get_document.return_value = doc
         mock_chunk_filter.return_value = mock.Mock(delete=mock.Mock())
-        # Use side_effect to accept Chunk() calls without DB validation.
-        mock_bulk_create.return_value = []
-
-        mock_extract_pages.return_value = [
-            {"page_number": 1, "raw_text": "raw one"},
-            {"page_number": 2, "raw_text": "raw two"},
-        ]
-        mock_clean_pages.return_value = [
-            {"page_number": 1, "raw_text": "raw one", "cleaned_text": "clean one"},
-            {"page_number": 2, "raw_text": "raw two", "cleaned_text": "clean two"},
-        ]
-        mock_chunk_pages.return_value = [
-            {"text": "chunk one", "page_number": 1, "token_offset": 0},
-            {"text": "chunk two", "page_number": 2, "token_offset": 500},
-            {"text": "chunk three", "page_number": 2, "token_offset": 950},
-        ]
-        embedded = [
-            {"text": "chunk one", "page_number": 1, "token_offset": 0, "embedding": [0.1]},
-            {"text": "chunk two", "page_number": 2, "token_offset": 500, "embedding": [0.2]},
-            {"text": "chunk three", "page_number": 2, "token_offset": 950, "embedding": [0.3]},
-        ]
-        mock_embed_chunks.return_value = embedded
-        mock_index_document.return_value = 3
 
         request = self.factory.post("/admin/documents/" + str(doc_id) + "/reindex/")
         request.user = self._staff_user()
@@ -371,10 +291,8 @@ class StaffDocumentReindexViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         mock_chunk_filter.return_value.delete.assert_called_once()
-        mock_bulk_create.assert_called_once()
-        mock_index_document.assert_called_once_with(str(doc_id), embedded)
-        self.assertEqual(doc.chunk_count, 3)
-        self.assertEqual(doc.page_count, 2)
+        mock_delete_document.assert_called_once_with(str(doc_id))
+        mock_ingest.assert_called_once_with(doc)
 
 
 class CORSTests(SimpleTestCase):

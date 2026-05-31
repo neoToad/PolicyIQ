@@ -55,7 +55,7 @@ These items are actively dangerous in any deployed or shared environment.
 - Use `os.path.basename()` or `pathlib.PurePath.name` to strip directory components from uploaded filenames
 - Optionally generate UUID-based filenames to avoid collisions
 
-### 1.5 Add file type validation on upload
+### 1.5 Add file type validation on upload ✅ COMPLETED
 
 **Problem**: Only HTML `accept="application/pdf"` restricts uploads — trivially bypassed. No server-side check that the file is actually a PDF before writing to disk.
 
@@ -64,7 +64,7 @@ These items are actively dangerous in any deployed or shared environment.
 - Check PDF magic bytes (`%PDF-`) on the first bytes of the file
 - Reject non-PDF uploads with a 400 error before writing to disk
 
-### 1.6 Configure CORS
+### 1.6 Configure CORS ✅ COMPLETED
 
 **Problem**: DRF is installed with zero configuration. Default permissions are fully open.
 
@@ -72,7 +72,7 @@ These items are actively dangerous in any deployed or shared environment.
 - Add `REST_FRAMEWORK` dict to `settings.py` with at minimum `DEFAULT_PERMISSION_CLASSES`
 - If API needs cross-origin access, add `django-cors-headers` and configure `CORS_ALLOWED_ORIGINS`
 
-### 1.7 Review CSRF on API views
+### 1.7 Review CSRF on API views ✅ COMPLETED
 
 **Problem**: CSRF handling is only set up for HTMX via a client-side listener. DRF `APIView` CSRF behavior depends on the authentication classes configured.
 
@@ -97,7 +97,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Use `document.file.path`, `document.file.url` instead of manual path construction
 - This also fixes 1.4 (path traversal) as a side effect
 
-### 2.2 Add DRF Serializers
+### 2.2 Add DRF Serializers ✅ COMPLETED
 
 **Problem**: AGENTS.md references `test_serializers.py` but no serializers exist. API views manually construct JSON dicts from model attributes, making the API contract implicit and fragile.
 

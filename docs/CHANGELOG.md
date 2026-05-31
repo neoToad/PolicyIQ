@@ -68,3 +68,13 @@
 - `QueryAPIView` now validates input via `QueryRequestSerializer` and serializes citations via `CitationSerializer`
 - Added `documents/tests/test_serializers.py` and `queries/tests/test_serializers.py` per AGENTS.md convention
 - **Improvement beyond spec**: `QueryRequestSerializer` uses `allow_blank=False` and `trim_whitespace=True` for stricter question validation; UUID `document_id` is coerced to string before passing to `retrieve_chunks` to match its type hint
+
+## [Phase2.3] Extract shared ingestion pipeline
+- Created `documents/services/pipeline.py` with `ingest_document(document, file_path=None)` that runs the full extraction → clean → chunk → embed → index pipeline
+- `_save_upload_and_ingest()` now calls `ingest_document()` after saving the temp file and creating the `Document` record; on failure it cleans up both the DB record and temp file
+- `StaffDocumentReindexView.post()` now calls `ingest_document()` directly after purging old ChromaDB chunks and PG `Chunk` records, eliminating the duplicated inline pipeline
+- Fixed `StaffDocumentReindexViewTests` to mock only `ingest_document` (and `delete_document`/`Chunk.objects.filter`/`Document.objects.get`) instead of 7 individual service mocks — satisfies Phase 4.3 as a side effect
+- Changed `DocumentUploadAPITests` from `SimpleTestCase` to `TestCase` (satisfies Phase 4.2) because `_save_upload_and_ingest` creates real `Document` records
+- Added test-specific SQLite in-memory database override in `settings.py` so `TestCase` tests run without requiring PostgreSQL `CREATEDB` privileges
+- Removed stray PDF artifacts (`bad.pdf`, `empty.pdf`, `fake.pdf`, `html.pdf`, `notext.pdf`, `tiny.pdf`) from `policyiq/documents/`
+- **Improvement beyond spec**: `ingest_document` returns a detailed result dict (`pages`, `cleaned_pages`, `chunks`, `embedded_chunks`) for potential debugging/monitoring; centralized temp-file and DB cleanup on pipeline failure prevents orphaned records in both upload and reindex paths

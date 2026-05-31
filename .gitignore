@@ -26,6 +26,9 @@ policyiq/chroma/
 # Sample/test documents at repo root
 /documents/
 
+# Stray PDFs inside the documents app (fixtures should live in tests/fixtures/)
+policyiq/documents/*.pdf
+
 # Environment variables
 .env
 .env.*
