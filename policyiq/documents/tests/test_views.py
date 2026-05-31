@@ -3,7 +3,7 @@ from unittest import mock
 from uuid import uuid4
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase, override_settings
+from django.test import RequestFactory, SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -13,6 +13,7 @@ from documents.views import (
     StaffDocumentDeleteView,
     StaffDocumentListView,
     StaffDocumentReindexView,
+    UploadPageView,
 )
 
 
@@ -138,6 +139,84 @@ class DocumentUploadAPITests(SimpleTestCase):
         self.assertIn("Invalid or corrupted PDF", result["error"])
         # Verify temp file was cleaned up on failure.
         mock_storage.delete.assert_called_once()
+
+    def test_upload_rejects_non_pdf_content_type(self):
+        upload = SimpleUploadedFile(
+            "not_a_pdf.txt",
+            b"This is a text file",
+            content_type="text/plain",
+        )
+        request = self.factory.post(
+            "/api/documents/upload/",
+            {"file": upload},
+            format="multipart",
+        )
+        force_authenticate(request, user=self.user)
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        result = response.data["results"][0]
+        self.assertEqual(result["success"], False)
+        self.assertEqual(result["name"], "not_a_pdf.txt")
+        self.assertIn("content type", result["error"].lower())
+
+    def test_upload_rejects_invalid_magic_bytes(self):
+        upload = SimpleUploadedFile(
+            "fake.pdf",
+            b"NOTPDF fake content",
+            content_type="application/pdf",
+        )
+        request = self.factory.post(
+            "/api/documents/upload/",
+            {"file": upload},
+            format="multipart",
+        )
+        force_authenticate(request, user=self.user)
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        result = response.data["results"][0]
+        self.assertEqual(result["success"], False)
+        self.assertEqual(result["name"], "fake.pdf")
+        self.assertIn("magic bytes", result["error"].lower())
+
+
+class UploadPageViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.view = UploadPageView.as_view()
+
+    def test_upload_rejects_non_pdf_content_type(self):
+        upload = SimpleUploadedFile(
+            "not_a_pdf.txt",
+            b"This is a text file",
+            content_type="text/plain",
+        )
+        request = self.factory.post("/upload/", {"file": upload})
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, 400)
+        content = response.content.decode()
+        self.assertIn("content type", content.lower())
+        self.assertIn("not_a_pdf.txt", content)
+
+    def test_upload_rejects_invalid_magic_bytes(self):
+        upload = SimpleUploadedFile(
+            "fake.pdf",
+            b"NOTPDF fake content",
+            content_type="application/pdf",
+        )
+        request = self.factory.post("/upload/", {"file": upload})
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, 400)
+        content = response.content.decode()
+        self.assertIn("magic bytes", content.lower())
+        self.assertIn("fake.pdf", content)
 
 
 class StaffDocumentListViewTests(SimpleTestCase):

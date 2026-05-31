@@ -1,7 +1,7 @@
 # Current Task
 
-**Build Complete — All Steps Finished**
-
-PolicyIQ build is complete. All steps from 1.1 through 4.5 have been implemented, tested, committed, and pushed to `feature/policyiq-build`.
-
----
+**Step**: 1.6 — Configure CORS
+**Status**: Starting
+**What I'm doing**: Adding DRF permissions configuration and django-cors-headers setup for API cross-origin access
+**Blockers/Decisions**: Need to decide whether to install django-cors-headers or just ensure DRF DEFAULT_PERMISSION_CLASSES is properly configured
+**Next step**: 1.7 — Review CSRF on API views

@@ -20,6 +20,25 @@ from documents.services.extractor import clean_pages, extract_pages
 from documents.services.indexer import delete_document, index_document
 
 
+def _validate_pdf(upload) -> str | None:
+    """Validate that an uploaded file is a PDF.
+
+    Checks the Content-Type header and the PDF magic bytes (%PDF-) at the
+    start of the file content. Returns an error message if invalid, None if
+    the file passes validation.
+    """
+    content_type = getattr(upload, "content_type", "")
+    if content_type != "application/pdf":
+        return f"Invalid content type: {content_type or 'unknown'}. Only application/pdf is allowed."
+
+    header = upload.read(5)
+    upload.seek(0)
+    if header != b"%PDF-":
+        return "File does not appear to be a valid PDF (magic bytes mismatch)."
+
+    return None
+
+
 def _save_upload_and_ingest(upload) -> Document:
     """Save the uploaded PDF via Django's storage and run the full ingestion pipeline.
 
@@ -87,13 +106,27 @@ class UploadPageView(View):
 
         results = []
         for upload in uploads:
+            validation_error = _validate_pdf(upload)
+            if validation_error:
+                results.append(
+                    {"success": False, "name": upload.name, "error": validation_error, "reason": "validation"}
+                )
+                continue
+
             try:
                 document = _save_upload_and_ingest(upload)
                 results.append({"success": True, "document": document})
             except Exception as exc:
                 results.append({"success": False, "name": upload.name, "error": str(exc)})
 
-        status_code = 201 if any(r["success"] for r in results) else 500
+        has_success = any(r["success"] for r in results)
+        has_validation_error = any(r.get("reason") == "validation" for r in results)
+        if has_success:
+            status_code = 201
+        elif has_validation_error:
+            status_code = 400
+        else:
+            status_code = 500
         return render(
             request,
             "documents/_upload_result.html",
@@ -190,6 +223,13 @@ class DocumentUploadAPIView(APIView):
 
         results = []
         for upload in uploads:
+            validation_error = _validate_pdf(upload)
+            if validation_error:
+                results.append(
+                    {"success": False, "name": upload.name, "error": validation_error, "reason": "validation"}
+                )
+                continue
+
             try:
                 document = _save_upload_and_ingest(upload)
                 results.append(
@@ -204,5 +244,12 @@ class DocumentUploadAPIView(APIView):
             except Exception as exc:
                 results.append({"success": False, "name": upload.name, "error": str(exc)})
 
-        status_code = status.HTTP_201_CREATED if any(r["success"] for r in results) else status.HTTP_500_INTERNAL_SERVER_ERROR
+        has_success = any(r["success"] for r in results)
+        has_validation_error = any(r.get("reason") == "validation" for r in results)
+        if has_success:
+            status_code = status.HTTP_201_CREATED
+        elif has_validation_error:
+            status_code = status.HTTP_400_BAD_REQUEST
+        else:
+            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
         return Response({"results": results}, status=status_code)
