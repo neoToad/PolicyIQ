@@ -69,6 +69,12 @@
 - Added `documents/tests/test_serializers.py` and `queries/tests/test_serializers.py` per AGENTS.md convention
 - **Improvement beyond spec**: `QueryRequestSerializer` uses `allow_blank=False` and `trim_whitespace=True` for stricter question validation; UUID `document_id` is coerced to string before passing to `retrieve_chunks` to match its type hint
 
+## [Phase2.4] De-duplicate citation construction
+- Created `queries/services/citations.py` with `build_citations(chunks)` helper
+- Replaced duplicated list-comprehensions in `AskPageView.post()` and `QueryAPIView.post()` with calls to `build_citations()`
+- Added `BuildCitationsTests` in `queries/tests/test_services.py` covering mapping, empty input, and fallback to "Unknown" document name
+- **Improvement beyond spec**: None needed — the helper is a straightforward DRY extraction
+
 ## [Phase2.3] Extract shared ingestion pipeline
 - Created `documents/services/pipeline.py` with `ingest_document(document, file_path=None)` that runs the full extraction → clean → chunk → embed → index pipeline
 - `_save_upload_and_ingest()` now calls `ingest_document()` after saving the temp file and creating the `Document` record; on failure it cleans up both the DB record and temp file

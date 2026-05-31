@@ -3,8 +3,49 @@
 import requests
 from django.test import SimpleTestCase, override_settings
 
+from queries.services.citations import build_citations
 from queries.services.generator import _generate_anthropic, _generate_ollama, build_prompt, generate_response
 from queries.services.retriever import retrieve_chunks
+
+
+class BuildCitationsTests(SimpleTestCase):
+    def test_build_citations_maps_chunks_to_citation_dicts(self):
+        chunks = [
+            {
+                "text": "This is a long chunk of text that should be truncated for the preview.",
+                "page_number": 3,
+                "document_name": "Policy A.pdf",
+                "similarity_score": 0.85,
+            },
+            {
+                "text": "Short.",
+                "page_number": 5,
+                "document_name": "Policy B.pdf",
+                "similarity_score": 0.72,
+            },
+        ]
+        citations = build_citations(chunks)
+        self.assertEqual(len(citations), 2)
+        self.assertEqual(citations[0]["document_name"], "Policy A.pdf")
+        self.assertEqual(citations[0]["page_number"], 3)
+        self.assertEqual(citations[0]["similarity_score"], 0.85)
+        self.assertEqual(citations[0]["text_preview"], "This is a long chunk of text that should be truncated for the preview."[:150])
+        self.assertEqual(citations[1]["text_preview"], "Short.")
+
+    def test_build_citations_defaults_to_unknown_document_name(self):
+        chunks = [
+            {
+                "text": "No document name here.",
+                "page_number": 1,
+                "similarity_score": 0.9,
+            }
+        ]
+        citations = build_citations(chunks)
+        self.assertEqual(citations[0]["document_name"], "Unknown")
+        self.assertEqual(citations[0]["page_number"], 1)
+
+    def test_build_citations_returns_empty_for_empty_chunks(self):
+        self.assertEqual(build_citations([]), [])
 
 
 class RetrieveChunksTests(SimpleTestCase):

@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 
 from documents.models import Document
 from queries.serializers import CitationSerializer, QueryRequestSerializer
+from queries.services.citations import build_citations
 from queries.services.generator import build_prompt, generate_response
 from queries.services.retriever import retrieve_chunks
 
@@ -37,15 +38,7 @@ class AskPageView(View):
                 "<p>No relevant information found in the uploaded documents.</p>"
             )
 
-        citations = [
-            {
-                "document_name": c.get("document_name", "Unknown"),
-                "page_number": c.get("page_number"),
-                "similarity_score": c["similarity_score"],
-                "text_preview": c["text"][:150],
-            }
-            for c in chunks
-        ]
+        citations = build_citations(chunks)
 
         def stream():
             yield '<div class="card"><p style="white-space: pre-wrap;">'
@@ -80,15 +73,7 @@ class QueryAPIView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        citations = [
-            {
-                "document_name": c.get("document_name", "Unknown"),
-                "page_number": c.get("page_number"),
-                "similarity_score": c["similarity_score"],
-                "text_preview": c["text"][:150],
-            }
-            for c in chunks
-        ]
+        citations = build_citations(chunks)
         citation_serializer = CitationSerializer(data=citations, many=True)
         citation_serializer.is_valid(raise_exception=True)
 
