@@ -69,6 +69,14 @@
 - Added `documents/tests/test_serializers.py` and `queries/tests/test_serializers.py` per AGENTS.md convention
 - **Improvement beyond spec**: `QueryRequestSerializer` uses `allow_blank=False` and `trim_whitespace=True` for stricter question validation; UUID `document_id` is coerced to string before passing to `retrieve_chunks` to match its type hint
 
+## [Phase3.2] Add pyproject.toml
+- Created `pyproject.toml` at repo root with `[project]` metadata (name, version, dependencies)
+- Added `[tool.ruff]` config: target Python 3.11, line length 120, rules E/F/W/I/UP/B/C4/SIM
+- Added `[tool.pytest.ini_options]` with `DJANGO_SETTINGS_MODULE` for pytest-django
+- Added `[tool.mypy]` config: Python 3.11, warn on missing returns, ignore missing imports
+- Kept `policyiq/requirements.txt` as the pip-installable reference for now
+- **Improvement beyond spec**: Added `B` (bugbear), `C4` (comprehensions), and `SIM` (simplify) rule groups for deeper linting beyond the spec's recommendation
+
 ## [Phase3.1] Consolidate requirements.txt
 - Deleted root-level `requirements.txt` (duplicate of `policyiq/requirements.txt`)
 - Merged missing packages into `policyiq/requirements.txt`: added `anthropic==0.105.2` and `django-cors-headers==4.9.0`
