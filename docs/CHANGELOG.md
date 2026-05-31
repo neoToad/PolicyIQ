@@ -136,3 +136,9 @@
 - Fixed inconsistent default in `retriever.retrieve_chunks(document_id: str | None = None)`
 - All ruff checks pass; all 66 tests pass
 - **Improvement beyond spec**: Used `collections.abc.Iterator` for generator return types (modern Python 3.11 idiom)
+
+## [Phase3.5] Clean up `_upload_result.html` legacy branch
+- Removed the dead `{% if document %}` branch from `_upload_result.html`
+- Verified that only `UploadPageView.post` renders this template and it always passes `results` (never `document`)
+- All 66 tests pass
+- **Improvement beyond spec**: None — straightforward dead-code removal

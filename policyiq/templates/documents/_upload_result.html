@@ -10,10 +10,5 @@
         <p><strong>{{ result.name }}</strong> <span style="color: #b91c1c;">(failed: {{ result.error }})</span></p>
       {% endif %}
     {% endfor %}
-  {% elif document %}
-    <h3>Upload Successful</h3>
-    <p><strong>Name:</strong> {{ document.name }}</p>
-    <p><strong>Pages:</strong> {{ document.page_count }}</p>
-    <p><strong>Chunks:</strong> {{ document.chunk_count }}</p>
   {% endif %}
 </div>

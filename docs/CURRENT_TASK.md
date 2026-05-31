@@ -1,9 +1,9 @@
 # Current Task
 
-**Step**: 3.5 — Clean up `_upload_result.html` legacy branch
+**Step**: 3.6 — Extract inline CSS from `base.html`
 **Status**: Starting
-**What I'm doing**: Removing the old `{% if document %}` branch from `_upload_result.html` and verifying no view sends a `document` context variable.
+**What I'm doing**: Moving CSS from `base.html` into `static/css/main.css` and loading it via `{% static %}`.
 
 **Blockers/Decisions**: None
 
-**Next step**: 3.6 — Extract inline CSS from `base.html`
+**Next step**: 3.7 — Add docstrings to public API functions
