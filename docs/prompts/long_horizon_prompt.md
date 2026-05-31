@@ -1,8 +1,7 @@
-You are building PolicyIQ. Start by reading both planning documents:
-- PolicyIQ_Planning.md
-- PolicyIQ_Prompt_Plan.md
+You are refactoring PolicyIQ. Start by reading documents:
+- [refactoring-plan.md](../refactoring-plan.md)
 
-The prompt plan is your implementation spec — execute every prompt in it, in order, from 1.1 through 4.5.
+The prompt plan is your implementation spec — execute every prompt in it, in order.
 
 ---
 
@@ -27,7 +26,7 @@ The prompt plan is your implementation spec — execute every prompt in it, in o
 
 Maintain two markdown files in the repo root throughout the entire build. Update them continuously — not just at the end.
 
-### CURRENT_TASK.md
+### docs/CURRENT_TASK.md
 Keep this file up to date at all times. It should always reflect exactly what is happening right now and should be updated
 before working on the step:
 - The current step number and name
@@ -37,7 +36,7 @@ before working on the step:
 
 Overwrite it completely each time you move to a new step. It should never describe a completed step — only the live current state.
 
-### CHANGELOG.md
+### docs/CHANGELOG.md
 Append an entry after every commit. Each entry should include:
 - The step number and commit message
 - A plain-English summary of what was built
@@ -59,6 +58,7 @@ As you build, use your judgment to refactor and add sensible improvements beyond
 - If a step produces errors, fix them before moving on. Do not proceed on broken code.
 - Do not batch multiple steps into one commit.
 - Always commit CURRENT_TASK.md and CHANGELOG.md alongside the step's code files.
+- All md files are located in the docs folder.
 
 ---
 
