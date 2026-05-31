@@ -3,6 +3,7 @@ from unittest import mock
 import requests
 from django.test import SimpleTestCase
 
+from documents.exceptions import EmbeddingError
 from documents.services.chunker import chunk_pages
 from documents.services.embedder import embed_chunks, embed_query
 from documents.services.indexer import delete_document, get_collection, index_document
@@ -106,7 +107,7 @@ class EmbedderTests(SimpleTestCase):
     def test_embed_query_raises_clear_error_when_ollama_unreachable(self, mock_post, mock_sleep):
         mock_post.side_effect = requests.RequestException("unreachable")
 
-        with self.assertRaisesRegex(RuntimeError, "Ollama"):
+        with self.assertRaisesRegex(EmbeddingError, "Ollama"):
             embed_query("policy question")
 
         self.assertEqual(mock_post.call_count, 3)

@@ -5,6 +5,8 @@ from collections.abc import Iterator
 import requests
 from django.conf import settings
 
+from queries.exceptions import GenerationError
+
 try:
     import anthropic
 except ImportError:  # pragma: no cover
@@ -37,7 +39,7 @@ def _generate_ollama(prompt: str) -> Iterator[str]:
             if attempt < RETRY_ATTEMPTS:
                 time.sleep(RETRY_DELAY_SECONDS)
 
-    raise RuntimeError(
+    raise GenerationError(
         "Ollama generation service is unreachable after 3 attempts at http://localhost:11434/api/generate."
     ) from last_error
 
@@ -48,10 +50,10 @@ ANTHROPIC_MAX_TOKENS = 1024
 
 def _generate_anthropic(prompt: str) -> Iterator[str]:
     if anthropic is None:
-        raise RuntimeError("Anthropic SDK is not installed. Install it with: pip install anthropic")
+        raise GenerationError("Anthropic SDK is not installed. Install it with: pip install anthropic")
     api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
     if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is not configured. Set it in your environment or Django settings.")
+        raise GenerationError("ANTHROPIC_API_KEY is not configured. Set it in your environment or Django settings.")
 
     client = anthropic.Anthropic(api_key=api_key)
     try:
@@ -66,7 +68,7 @@ def _generate_anthropic(prompt: str) -> Iterator[str]:
                     if text:
                         yield text
     except Exception as exc:
-        raise RuntimeError("Anthropic generation service failed. Check your API key and network connection.") from exc
+        raise GenerationError("Anthropic generation service failed. Check your API key and network connection.") from exc
 
 
 def generate_response(prompt: str) -> Iterator[str]:
@@ -77,7 +79,7 @@ def generate_response(prompt: str) -> Iterator[str]:
 
     Raises:
         ValueError: If ``LLM_BACKEND`` is not ``ollama`` or ``anthropic``.
-        RuntimeError: If the chosen backend is unreachable or misconfigured.
+        GenerationError: If the chosen backend is unreachable or misconfigured.
     """
     backend = getattr(settings, "LLM_BACKEND", "ollama")
     if backend == "ollama":

@@ -160,3 +160,12 @@
   - `queries/services/generator.py`: `generate_response`, `build_prompt`
 - All ruff checks and 66 tests pass
 - **Improvement beyond spec**: Used Google-style docstrings consistently with Args/Returns/Raises sections where applicable
+
+## [Phase5.2] Add custom exception classes
+- Created `documents/exceptions.py` with `DocumentError`, `ExtractionError`, `ChunkingError`, `EmbeddingError`, `IndexingError`
+- Created `queries/exceptions.py` with `QueryError`, `RetrievalError`, `GenerationError`
+- Updated `documents/services/embedder.py` to raise `EmbeddingError` on Ollama failure
+- Updated `queries/services/generator.py` to raise `GenerationError` on Ollama and Anthropic failures
+- Updated test assertions in `test_services.py` files to expect the new exception types
+- All 66 tests pass
+- **Improvement beyond spec**: Hierarchical exception bases (`DocumentError`, `QueryError`) allow callers to catch broad categories or specific failures

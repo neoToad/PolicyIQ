@@ -3,6 +3,7 @@ from unittest import mock
 import requests
 from django.test import SimpleTestCase, override_settings
 
+from queries.exceptions import GenerationError
 from queries.services.citations import build_citations
 from queries.services.generator import _generate_anthropic, build_prompt, generate_response
 from queries.services.retriever import retrieve_chunks
@@ -196,7 +197,7 @@ class GenerateResponseTests(SimpleTestCase):
     def test_generate_response_raises_clear_error_when_ollama_unreachable(self, mock_post, mock_sleep):
         mock_post.side_effect = requests.RequestException("unreachable")
 
-        with self.assertRaisesRegex(RuntimeError, "Ollama"):
+        with self.assertRaisesRegex(GenerationError, "Ollama"):
             list(generate_response("test prompt"))
 
         self.assertEqual(mock_post.call_count, 3)
@@ -263,5 +264,5 @@ class AnthropicGenerationTests(SimpleTestCase):
         mock_client.messages.stream.side_effect = Exception("API error")
         mock_client_cls.return_value = mock_client
 
-        with self.assertRaisesRegex(RuntimeError, "Anthropic"):
+        with self.assertRaisesRegex(GenerationError, "Anthropic"):
             list(_generate_anthropic("test prompt"))
