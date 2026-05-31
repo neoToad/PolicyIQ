@@ -142,3 +142,10 @@
 - Verified that only `UploadPageView.post` renders this template and it always passes `results` (never `document`)
 - All 66 tests pass
 - **Improvement beyond spec**: None — straightforward dead-code removal
+
+## [Phase3.6] Extract inline CSS from `base.html`
+- Moved ~160 lines of inline CSS from `base.html` to `static/css/main.css`
+- Added `{% load static %}` and `<link rel="stylesheet" href="{% static 'css/main.css' %}">` to `base.html`
+- Verified `STATIC_URL` and `django.contrib.staticfiles` were already configured
+- All 66 tests pass
+- **Improvement beyond spec**: None — straightforward extraction

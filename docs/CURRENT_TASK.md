@@ -1,9 +1,9 @@
 # Current Task
 
-**Step**: 3.6 — Extract inline CSS from `base.html`
+**Step**: Batch processing — 3.7 + 4.4–4.6 + 5.1–5.6
 **Status**: Starting
-**What I'm doing**: Moving CSS from `base.html` into `static/css/main.css` and loading it via `{% static %}`.
+**What I'm doing**: Running a multi-agent workflow to complete all remaining refactoring steps in parallel batches.
 
 **Blockers/Decisions**: None
 
-**Next step**: 3.7 — Add docstrings to public API functions
+**Next step**: Synthesize workflow results, verify tests, commit each step.
