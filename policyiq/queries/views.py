@@ -17,11 +17,15 @@ from queries.services.retriever import retrieve_chunks
 
 
 class AskPageView(View):
+    """Render the ask form and stream LLM answers via HTMX."""
+
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the ask page with the question form and document selector."""
         documents = Document.objects.order_by("-uploaded_at")
         return render(request, "queries/ask.html", {"documents": documents})
 
     def post(self, request: HttpRequest) -> HttpResponse:
+        """Retrieve relevant chunks and stream an LLM-generated answer."""
         question = request.POST.get("question", "").strip()
         document_id = request.POST.get("document_id") or None
 
@@ -50,9 +54,12 @@ class AskPageView(View):
 
 
 class QueryAPIView(APIView):
+    """Authenticated API endpoint for querying documents with RAG."""
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request) -> Response:
+        """Validate request, retrieve chunks, and stream an LLM answer with citations."""
         request_serializer = QueryRequestSerializer(data=request.data)
         if not request_serializer.is_valid():
             return Response(request_serializer.errors, status=status.HTTP_400_BAD_REQUEST)

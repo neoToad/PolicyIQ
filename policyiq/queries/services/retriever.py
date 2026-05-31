@@ -3,6 +3,19 @@ from documents.services.indexer import get_collection
 
 
 def retrieve_chunks(query: str, document_id: str | None = None, top_k: int = 5) -> list[dict]:
+    """Retrieve the most semantically similar chunks for a query.
+
+    Embeds the query, queries ChromaDB, and converts squared L2 distances
+    into cosine similarity scores.
+
+    Args:
+        query: The user's question.
+        document_id: Optional UUID to restrict search to a single document.
+        top_k: Maximum number of chunks to return.
+
+    Returns:
+        Chunks sorted by descending similarity score.
+    """
     query_embedding = embed_query(query)
     collection = get_collection()
 

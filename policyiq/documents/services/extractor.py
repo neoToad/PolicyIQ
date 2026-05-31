@@ -5,6 +5,18 @@ import fitz
 
 
 def extract_pages(pdf_path: str) -> list[dict]:
+    """Extract raw text from each page of a PDF.
+
+    Args:
+        pdf_path: Absolute path to the PDF file.
+
+    Returns:
+        A list of dicts with keys ``page_number`` and ``raw_text``.
+
+    Raises:
+        FileNotFoundError: If the file does not exist.
+        ValueError: If the file is not a valid PDF.
+    """
     try:
         with fitz.open(pdf_path) as doc:
             return [
@@ -21,6 +33,7 @@ PAGE_ARTIFACT_PATTERN = re.compile(r"^page\s+\d+\s+of\s+\d+$", re.IGNORECASE)
 
 
 def clean_pages(pages: list[dict]) -> list[dict]:
+    """Remove headers, footers, page artifacts, and rejoin broken lines."""
     line_counts: Counter[str] = Counter()
     page_lines: list[list[str]] = []
 

@@ -9,6 +9,11 @@ RETRY_DELAY_SECONDS = 1
 
 
 def embed_chunks(chunks: list[dict]) -> list[dict]:
+    """Embed each chunk's text using the configured embedding model.
+
+    Returns the chunks with an additional ``embedding`` key containing
+    the normalized vector.
+    """
     embedded_chunks = []
     for chunk in chunks:
         embedding = _embed_text(chunk["text"])
@@ -17,10 +22,12 @@ def embed_chunks(chunks: list[dict]) -> list[dict]:
 
 
 def embed_query(query: str) -> list[float]:
+    """Embed a user query so it can be used for vector search."""
     return _embed_text(query)
 
 
 def _embed_text(text: str) -> list[float]:
+    """Call the Ollama embedding endpoint with retries and L2-normalize the result."""
     payload = {"model": OLLAMA_EMBED_MODEL, "prompt": text}
     last_error: Exception | None = None
 

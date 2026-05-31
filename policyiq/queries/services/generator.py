@@ -70,6 +70,15 @@ def _generate_anthropic(prompt: str) -> Iterator[str]:
 
 
 def generate_response(prompt: str) -> Iterator[str]:
+    """Stream LLM tokens for the given prompt using the configured backend.
+
+    Yields:
+        Individual text tokens from the LLM response stream.
+
+    Raises:
+        ValueError: If ``LLM_BACKEND`` is not ``ollama`` or ``anthropic``.
+        RuntimeError: If the chosen backend is unreachable or misconfigured.
+    """
     backend = getattr(settings, "LLM_BACKEND", "ollama")
     if backend == "ollama":
         yield from _generate_ollama(prompt)
@@ -80,6 +89,20 @@ def generate_response(prompt: str) -> Iterator[str]:
 
 
 def build_prompt(question: str, chunks: list[dict], similarity_threshold: float = 0.5) -> str | None:
+    """Assemble a RAG prompt from retrieved chunks.
+
+    Returns ``None`` when no chunk meets the similarity threshold, signalling
+    the view layer to return a "no relevant information" response.
+
+    Args:
+        question: The user's query.
+        chunks: Retrieved chunks with ``text``, ``page_number``, ``document_name``,
+            and ``similarity_score``.
+        similarity_threshold: Minimum score required for any chunk to form a prompt.
+
+    Returns:
+        A formatted prompt string, or ``None`` if relevance is too low.
+    """
     if not chunks:
         return None
     if max(c["similarity_score"] for c in chunks) < similarity_threshold:

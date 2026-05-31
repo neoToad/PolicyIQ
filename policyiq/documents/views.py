@@ -83,10 +83,14 @@ def _save_upload_and_ingest(upload: UploadedFile) -> Document:
 
 
 class UploadPageView(View):
+    """Render the upload form and handle HTMX multi-file uploads."""
+
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the upload page with the file input form."""
         return render(request, "documents/upload.html")
 
     def post(self, request: HttpRequest) -> HttpResponse:
+        """Handle multi-file upload, validate PDFs, and run ingestion pipeline."""
         uploads = request.FILES.getlist("file")
         if not uploads:
             return render(
@@ -128,12 +132,17 @@ class UploadPageView(View):
 
 
 class HistoryPageView(View):
+    """Display a chronological list of all uploaded documents."""
+
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the history page with documents ordered by upload date."""
         documents = Document.objects.order_by("-uploaded_at")
         return render(request, "documents/history.html", {"documents": documents})
 
 
 class DocumentDeleteView(View):
+    """Delete a document and its associated ChromaDB chunks."""
+
     def delete(self, request: HttpRequest, pk: str) -> HttpResponse:
         try:
             document = Document.objects.get(pk=pk)
@@ -147,14 +156,20 @@ class DocumentDeleteView(View):
 
 @method_decorator(staff_member_required, name="dispatch")
 class StaffDocumentListView(View):
+    """Staff-only view listing all documents for administration."""
+
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the staff admin page with all documents."""
         documents = Document.objects.order_by("-uploaded_at")
         return render(request, "documents/admin.html", {"documents": documents})
 
 
 @method_decorator(staff_member_required, name="dispatch")
 class StaffDocumentDeleteView(View):
+    """Staff-only view to delete a document and its ChromaDB chunks."""
+
     def delete(self, request: HttpRequest, pk: str) -> HttpResponse:
+        """Remove the document from PostgreSQL and ChromaDB."""
         try:
             document = Document.objects.get(pk=pk)
         except Document.DoesNotExist:
@@ -167,7 +182,10 @@ class StaffDocumentDeleteView(View):
 
 @method_decorator(staff_member_required, name="dispatch")
 class StaffDocumentReindexView(View):
+    """Staff-only view to purge and re-run the ingestion pipeline for a document."""
+
     def post(self, request: HttpRequest, pk: str) -> HttpResponse:
+        """Delete existing chunks and re-ingest the document."""
         try:
             document = Document.objects.get(pk=pk)
         except Document.DoesNotExist:
@@ -183,9 +201,12 @@ class StaffDocumentReindexView(View):
 
 
 class DocumentUploadAPIView(APIView):
+    """Authenticated API endpoint for uploading PDF documents."""
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request) -> Response:
+        """Validate and ingest uploaded PDFs, returning structured results."""
         uploads = request.FILES.getlist("file")
         if not uploads:
             return Response(

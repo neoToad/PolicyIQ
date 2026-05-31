@@ -19,10 +19,21 @@ def get_chroma_client() -> chromadb.PersistentClient:
 
 
 def get_collection(collection_name: str = "policyiq") -> chromadb.Collection:
+    """Get or create a ChromaDB collection by name."""
     return get_chroma_client().get_or_create_collection(name=collection_name)
 
 
 def index_document(document_id: str, chunks: list[dict], document_name: str = "") -> int:
+    """Index chunk embeddings and metadata into ChromaDB.
+
+    Args:
+        document_id: UUID of the document being indexed.
+        chunks: List of chunks with ``embedding``, ``text``, ``page_number``, and ``token_offset``.
+        document_name: Human-readable name stored in metadata for retrieval.
+
+    Returns:
+        The number of chunks indexed.
+    """
     collection = get_collection()
     ids = [f"{document_id}:{chunk['token_offset']}" for chunk in chunks]
     embeddings = [chunk["embedding"] for chunk in chunks]
@@ -47,5 +58,6 @@ def index_document(document_id: str, chunks: list[dict], document_name: str = ""
 
 
 def delete_document(document_id: str) -> None:
+    """Delete all chunks belonging to a document from ChromaDB."""
     collection = get_collection()
     collection.delete(where={"document_id": document_id})

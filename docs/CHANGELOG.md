@@ -149,3 +149,14 @@
 - Verified `STATIC_URL` and `django.contrib.staticfiles` were already configured
 - All 66 tests pass
 - **Improvement beyond spec**: None — straightforward extraction
+
+## [Phase3.7] Add docstrings to public API functions
+- Added docstrings to all view classes and their public methods in `documents/views.py` and `queries/views.py`
+- Added docstrings to all public service functions:
+  - `documents/services/extractor.py`: `extract_pages`, `clean_pages`
+  - `documents/services/embedder.py`: `embed_chunks`, `embed_query`, `_embed_text`
+  - `documents/services/indexer.py`: `get_collection`, `index_document`, `delete_document`
+  - `queries/services/retriever.py`: `retrieve_chunks`
+  - `queries/services/generator.py`: `generate_response`, `build_prompt`
+- All ruff checks and 66 tests pass
+- **Improvement beyond spec**: Used Google-style docstrings consistently with Args/Returns/Raises sections where applicable
