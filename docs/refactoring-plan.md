@@ -1,7 +1,7 @@
 # PolicyIQ Refactoring Plan
 
 > **Scope**: Codebase improvements only — no new features. This plan addresses security vulnerabilities, architectural debt, code quality, and maintainability.
-> **Status**: Plan only. No code changes until approved and implemented phase-by-phase.
+> **Status**: In progress. Phases 1–2 fully complete; Phase 3 items 3.1–3.3 complete; Phase 4 items 4.1–4.3 complete as side-effects of earlier phases.
 
 ---
 
@@ -107,7 +107,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Replace manual JSON construction in `DocumentUploadAPIView` and `QueryAPIView`
 - Write `test_serializers.py` per AGENTS.md convention
 
-### 2.3 Extract shared ingestion pipeline
+### 2.3 Extract shared ingestion pipeline ✅ COMPLETED
 
 **Problem**: `StaffDocumentReindexView.post()` duplicates the entire extraction/clean/chunk/embed/index pipeline that `_save_upload_and_ingest()` already implements. The reindex view reimplements it inline (lines 134-159 of `views.py`).
 
@@ -117,7 +117,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Have `StaffDocumentReindexView.post()` call `ingest_document()` directly
 - Delete the duplicated pipeline code from the reindex view
 
-### 2.4 De-duplicate citation construction
+### 2.4 De-duplicate citation construction ✅ COMPLETED
 
 **Problem**: The same list comprehension building the `citations` dict appears in both `AskPageView.post()` and `QueryAPIView.post()`.
 
@@ -125,7 +125,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Extract a `build_citations(chunks: list[dict]) -> list[dict]` helper into `queries/services/` (or into the retriever)
 - Both views call the shared function
 
-### 2.5 Decouple `retriever.py` from `documents.models`
+### 2.5 Decouple `retriever.py` from `documents.models` ✅ COMPLETED
 
 **Problem**: `queries/services/retriever.py` imports from `documents.models` to fetch `document_name` for each chunk. This creates a hard cross-app ORM dependency.
 
@@ -134,7 +134,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Move the document_name enrichment to the view layer or to a thin coordination service
 - Alternatively, store `document_name` in ChromaDB metadata during indexing so the retriever never needs to query PG
 
-### 2.6 Singleton ChromaDB client
+### 2.6 Singleton ChromaDB client ✅ COMPLETED
 
 **Problem**: `get_collection()` creates a new `PersistentClient` on every call. This is wasteful and can cause locking issues with ChromaDB's SQLite backend under concurrency.
 
@@ -156,7 +156,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 
 ## Phase 3 — Code Quality & Tooling (Medium)
 
-### 3.1 Consolidate `requirements.txt`
+### 3.1 Consolidate `requirements.txt` ✅ COMPLETED
 
 **Problem**: Two `requirements.txt` files exist — one at the repo root (python-dotenv==1.1.1, missing `anthropic`) and one in `policyiq/` (python-dotenv==1.2.2, has `anthropic`). This is confusing and error-prone.
 
@@ -165,7 +165,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Keep only `policyiq/requirements.txt` as the single source of truth
 - Pin all versions consistently
 
-### 3.2 Add `pyproject.toml`
+### 3.2 Add `pyproject.toml` ✅ COMPLETED
 
 **Problem**: No `pyproject.toml`, `setup.cfg`, or `setup.py`. The project has no declared build system, tool config, or package metadata.
 
@@ -177,7 +177,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
   - `[tool.mypy]` for type checking config
 - Move requirements into `[project.dependencies]` (or keep `requirements.txt` for pip and reference it)
 
-### 3.3 Add linting and formatting
+### 3.3 Add linting and formatting ✅ COMPLETED
 
 **Problem**: No linter, formatter, or type checker is configured. Code style is inconsistent (some type hints, some docstrings, some not).
 
@@ -227,7 +227,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 
 ## Phase 4 — Testing Improvements (Medium)
 
-### 4.1 Add serializers tests
+### 4.1 Add serializers tests ✅ COMPLETED (in Phase 2.2)
 
 **Problem**: AGENTS.md mandates `test_serializers.py` but no serializers or tests exist.
 
@@ -235,7 +235,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Create after Phase 2.2 (serializers)
 - Test serialization, validation, and field presence for each serializer
 
-### 4.2 Use `TestCase` instead of `SimpleTestCase` where appropriate
+### 4.2 Use `TestCase` instead of `SimpleTestCase` where appropriate ✅ COMPLETED (in Phase 2.3)
 
 **Problem**: All tests use `SimpleTestCase` which doesn't support database transactions. Any test that creates real model instances will silently fail.
 
@@ -243,7 +243,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Change tests that create `Document` or `Chunk` instances to use `TestCase`
 - Keep `SimpleTestCase` for tests that are purely mock-based and don't touch the DB
 
-### 4.3 Reduce mock depth in `test_views.py`
+### 4.3 Reduce mock depth in `test_views.py` ✅ COMPLETED (in Phase 2.3)
 
 **Problem**: One test in `documents/tests/test_views.py` has 7 `@mock.patch` decorators — hard to read, fragile, and a sign the function under test has too many dependencies.
 
@@ -341,14 +341,14 @@ These items reduce coupling, enable independent evolution, and fix design proble
 
 ## Summary Table
 
-| Phase | Items | Priority | Estimated Effort |
-|-------|-------|----------|-----------------|
-| 1 — Security | 7 items | Critical | 2-3 days |
-| 2 — Architecture | 7 items | High | 3-4 days |
-| 3 — Code Quality | 7 items | Medium | 2-3 days |
-| 4 — Testing | 6 items | Medium | 2-3 days |
-| 5 — Operational | 6 items | Lower | 2-3 days |
-| **Total** | **33 items** | | **11-16 days** |
+| Phase | Items | Status | Priority | Estimated Effort |
+|-------|-------|--------|----------|-----------------|
+| 1 — Security | 7 items | ✅ Complete | Critical | 2-3 days |
+| 2 — Architecture | 7 items | ✅ Complete | High | 3-4 days |
+| 3 — Code Quality | 7 items | 3/7 done | Medium | 2-3 days |
+| 4 — Testing | 6 items | 3/6 done | Medium | 2-3 days |
+| 5 — Operational | 6 items | Not started | Lower | 2-3 days |
+| **Total** | **33 items** | **20/33 done** | | **11-16 days** |
 
 ---
 
