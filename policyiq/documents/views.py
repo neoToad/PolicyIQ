@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from documents.models import Chunk, Document
+from documents.serializers import UploadResultSerializer
 from documents.services.chunker import chunk_pages
 from documents.services.embedder import embed_chunks
 from documents.services.extractor import clean_pages, extract_pages
@@ -235,7 +236,7 @@ class DocumentUploadAPIView(APIView):
                 results.append(
                     {
                         "success": True,
-                        "document_id": str(document.id),
+                        "document_id": document.id,
                         "name": document.name,
                         "page_count": document.page_count,
                         "chunk_count": document.chunk_count,
@@ -243,6 +244,9 @@ class DocumentUploadAPIView(APIView):
                 )
             except Exception as exc:
                 results.append({"success": False, "name": upload.name, "error": str(exc)})
+
+        serializer = UploadResultSerializer(data=results, many=True)
+        serializer.is_valid(raise_exception=True)
 
         has_success = any(r["success"] for r in results)
         has_validation_error = any(r.get("reason") == "validation" for r in results)
@@ -252,4 +256,4 @@ class DocumentUploadAPIView(APIView):
             status_code = status.HTTP_400_BAD_REQUEST
         else:
             status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return Response({"results": results}, status=status_code)
+        return Response({"results": serializer.data}, status=status_code)

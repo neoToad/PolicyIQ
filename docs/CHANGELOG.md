@@ -60,3 +60,11 @@
   - UploadPageView POST without CSRF token returns 403
   - API POST with TokenAuthentication succeeds without CSRF token
 - **Improvement beyond spec**: Explicit test coverage for CSRF behavior; documented the token-auth choice in test docstrings
+
+## [Phase2.2] Add DRF Serializers
+- Created `documents/serializers.py` with `DocumentSerializer`, `ChunkSerializer`, and `UploadResultSerializer`
+- Created `queries/serializers.py` with `QueryRequestSerializer`, `CitationSerializer`, and `QueryResponseSerializer`
+- `DocumentUploadAPIView` now validates response shape via `UploadResultSerializer(many=True)`
+- `QueryAPIView` now validates input via `QueryRequestSerializer` and serializes citations via `CitationSerializer`
+- Added `documents/tests/test_serializers.py` and `queries/tests/test_serializers.py` per AGENTS.md convention
+- **Improvement beyond spec**: `QueryRequestSerializer` uses `allow_blank=False` and `trim_whitespace=True` for stricter question validation; UUID `document_id` is coerced to string before passing to `retrieve_chunks` to match its type hint

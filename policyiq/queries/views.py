@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from documents.models import Document
+from queries.serializers import CitationSerializer, QueryRequestSerializer
 from queries.services.generator import build_prompt, generate_response
 from queries.services.retriever import retrieve_chunks
 
@@ -59,15 +60,16 @@ class AskPageView(View):
 
 class QueryAPIView(APIView):
     permission_classes = [IsAuthenticated]
-    def post(self, request):
-        question = request.data.get("question", "").strip()
-        document_id = request.data.get("document_id") or None
 
-        if not question:
-            return Response(
-                {"error": {"message": "Question is required."}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+    def post(self, request):
+        request_serializer = QueryRequestSerializer(data=request.data)
+        if not request_serializer.is_valid():
+            return Response(request_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        question = request_serializer.validated_data["question"]
+        document_id = request_serializer.validated_data.get("document_id")
+        if document_id is not None:
+            document_id = str(document_id)
 
         chunks = retrieve_chunks(question, document_id=document_id, top_k=5)
         prompt = build_prompt(question, chunks, similarity_threshold=0.5)
@@ -87,11 +89,13 @@ class QueryAPIView(APIView):
             }
             for c in chunks
         ]
+        citation_serializer = CitationSerializer(data=citations, many=True)
+        citation_serializer.is_valid(raise_exception=True)
 
         def stream():
             for token in generate_response(prompt):
                 yield token
 
         response = StreamingHttpResponse(stream(), content_type="text/plain")
-        response["X-Citations"] = json.dumps(citations)
+        response["X-Citations"] = json.dumps(citation_serializer.data)
         return response
