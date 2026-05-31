@@ -116,6 +116,11 @@ class EmbedderTests(SimpleTestCase):
 
 
 class IndexerTests(SimpleTestCase):
+    def setUp(self):
+        # Ensure the singleton client cache is cleared between tests.
+        from documents.services.indexer import get_chroma_client
+        get_chroma_client.cache_clear()
+
     @mock.patch("documents.services.indexer.chromadb.PersistentClient")
     @mock.patch("documents.services.indexer.settings")
     def test_get_collection_uses_persist_dir_and_returns_named_collection(

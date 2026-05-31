@@ -69,6 +69,12 @@
 - Added `documents/tests/test_serializers.py` and `queries/tests/test_serializers.py` per AGENTS.md convention
 - **Improvement beyond spec**: `QueryRequestSerializer` uses `allow_blank=False` and `trim_whitespace=True` for stricter question validation; UUID `document_id` is coerced to string before passing to `retrieve_chunks` to match its type hint
 
+## [Phase2.6] Singleton ChromaDB client
+- Introduced `get_chroma_client()` with `@functools.lru_cache(maxsize=1)` in `documents/services/indexer.py` to cache the `PersistentClient` instance
+- `get_collection()` now reuses the singleton client instead of creating a new one on every call
+- Added `cache_clear()` in `IndexerTests.setUp()` to prevent cached mocks from leaking between tests
+- **Improvement beyond spec**: Extracted `_get_persist_dir()` helper for cleaner separation of config logic from client creation
+
 ## [Phase2.5] Decouple retriever.py from documents.models
 - Added `document_name` to ChromaDB metadata in `index_document()` so the retriever never needs to query PostgreSQL for document names
 - Removed `from documents.models import Document` from `queries/services/retriever.py` — the `queries` app is now fully decoupled from the `documents` ORM

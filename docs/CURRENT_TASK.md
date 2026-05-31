@@ -1,9 +1,9 @@
 # Current Task
 
-**Step**: 2.5 — Decouple `retriever.py` from `documents.models`
+**Step**: 2.6 — Singleton ChromaDB client
 **Status**: Starting
-**What I'm doing**: Removing the cross-app ORM dependency from `retriever.py` by storing `document_name` in ChromaDB metadata during indexing, so the retriever never needs to query PostgreSQL
+**What I'm doing**: Caching the ChromaDB `PersistentClient` instance so it is created lazily on first access and reused across calls, preventing locking issues under concurrency
 
 **Blockers/Decisions**: None
 
-**Next step**: 2.6 — Singleton ChromaDB client
+**Next step**: 3.1 — Consolidate requirements.txt
