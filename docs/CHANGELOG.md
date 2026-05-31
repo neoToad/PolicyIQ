@@ -69,6 +69,13 @@
 - Added `documents/tests/test_serializers.py` and `queries/tests/test_serializers.py` per AGENTS.md convention
 - **Improvement beyond spec**: `QueryRequestSerializer` uses `allow_blank=False` and `trim_whitespace=True` for stricter question validation; UUID `document_id` is coerced to string before passing to `retrieve_chunks` to match its type hint
 
+## [Phase3.1] Consolidate requirements.txt
+- Deleted root-level `requirements.txt` (duplicate of `policyiq/requirements.txt`)
+- Merged missing packages into `policyiq/requirements.txt`: added `anthropic==0.105.2` and `django-cors-headers==4.9.0`
+- Updated `python-dotenv` from `1.1.1` to `1.2.2` (latest)
+- `policyiq/requirements.txt` is now the single source of truth
+- **Improvement beyond spec**: Verified the merged requirements cover all imports used in the codebase
+
 ## [Phase2.6] Singleton ChromaDB client
 - Introduced `get_chroma_client()` with `@functools.lru_cache(maxsize=1)` in `documents/services/indexer.py` to cache the `PersistentClient` instance
 - `get_collection()` now reuses the singleton client instead of creating a new one on every call

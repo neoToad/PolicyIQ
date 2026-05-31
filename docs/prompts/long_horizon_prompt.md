@@ -1,7 +1,7 @@
 You are refactoring PolicyIQ. Start by reading documents:
 - [refactoring-plan.md](../refactoring-plan.md)
 
-The prompt plan is your implementation spec — execute every prompt in it, in order.
+The prompt plan is your implementation spec — execute every prompt in it, in order. Mark the phase as completed in the file after it has been completed.
 
 ---
 

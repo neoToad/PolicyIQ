@@ -1,9 +1,9 @@
 # Current Task
 
-**Step**: 2.6 — Singleton ChromaDB client
+**Step**: 3.1 — Consolidate requirements.txt
 **Status**: Starting
-**What I'm doing**: Caching the ChromaDB `PersistentClient` instance so it is created lazily on first access and reused across calls, preventing locking issues under concurrency
+**What I'm doing**: Removing the duplicate root-level requirements.txt and keeping `policyiq/requirements.txt` as the single source of truth
 
 **Blockers/Decisions**: None
 
-**Next step**: 3.1 — Consolidate requirements.txt
+**Next step**: 3.2 — Add pyproject.toml
