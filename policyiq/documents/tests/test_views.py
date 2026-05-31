@@ -375,3 +375,31 @@ class StaffDocumentReindexViewTests(SimpleTestCase):
         mock_index_document.assert_called_once_with(str(doc_id), embedded)
         self.assertEqual(doc.chunk_count, 3)
         self.assertEqual(doc.page_count, 2)
+
+
+class CORSTests(SimpleTestCase):
+    def test_api_preflight_includes_cors_headers(self):
+        """An OPTIONS preflight request from an allowed origin must return CORS headers."""
+        from django.test import Client
+
+        client = Client()
+        response = client.options(
+            "/api/documents/upload/",
+            HTTP_ORIGIN="http://localhost:3000",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Access-Control-Allow-Origin", response)
+        self.assertEqual(response["Access-Control-Allow-Origin"], "http://localhost:3000")
+
+    def test_api_get_includes_cors_headers(self):
+        """A GET request from an allowed origin must include the CORS header."""
+        from django.test import Client
+
+        client = Client()
+        response = client.get(
+            "/api/documents/upload/",
+            HTTP_ORIGIN="http://localhost:3000",
+        )
+        self.assertIn("Access-Control-Allow-Origin", response)
+        self.assertEqual(response["Access-Control-Allow-Origin"], "http://localhost:3000")

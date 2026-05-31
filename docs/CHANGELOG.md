@@ -45,3 +45,10 @@
 - Added `UploadPageViewTests` for the HTMX upload path (previously untested)
 - Added API tests for content-type rejection and magic-byte rejection
 - **Improvement beyond spec**: Distinguishes validation errors (client error → 400) from pipeline errors (server error → 500) in HTTP status codes
+
+## [Phase1.6] Configure CORS
+- Added `django-cors-headers==4.9.0` to requirements
+- Added `corsheaders` app and `CorsMiddleware` to `settings.py`
+- Configured `CORS_ALLOWED_ORIGINS` from `CORS_ALLOWED_ORIGINS` env var with sensible local-dev defaults (`http://localhost:3000`, `http://127.0.0.1:3000`)
+- Added `CORSTests` verifying preflight OPTIONS and GET responses include `Access-Control-Allow-Origin` headers
+- **Improvement beyond spec**: Env-var configurability for allowed origins; tests cover both preflight and actual request paths
