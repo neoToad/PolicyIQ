@@ -187,7 +187,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Run `ruff format` and `ruff check --fix` on the existing code
 - Add a `make lint` / `make format` target (or just document the commands)
 
-### 3.4 Add type hints consistently
+### 3.4 Add type hints consistently ✅ COMPLETED
 
 **Problem**: Service functions have type hints but view methods don't. Return types are inconsistent.
 
@@ -196,7 +196,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Add return type hints to all service functions (most already have them)
 - Consider adding `mypy` to CI once `pyproject.toml` is in place
 
-### 3.5 Clean up `_upload_result.html` legacy branch
+### 3.5 Clean up `_upload_result.html` legacy branch ✅ COMPLETED
 
 **Problem**: `_upload_result.html` has a legacy `document` branch alongside the new `results` branch — incomplete cleanup after the multi-file upload refactor.
 
@@ -205,7 +205,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Keep only the `{% if results %}` branch
 - Verify no code path still sends a `document` context variable
 
-### 3.6 Extract inline CSS from `base.html`
+### 3.6 Extract inline CSS from `base.html` ✅ COMPLETED
 
 **Problem**: All CSS (~130 lines) is inline in `base.html`. This makes the template harder to read and prevents caching.
 
@@ -214,7 +214,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Load via `{% static %}` template tag
 - Keep critical CSS (if any) inline for fast first paint; move the rest to the file
 
-### 3.7 Add docstrings to public API functions
+### 3.7 Add docstrings to public API functions ✅ COMPLETED
 
 **Problem**: Only `chunk_pages()` has a docstring. Other service functions and all view classes lack docstrings.
 
@@ -282,7 +282,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 
 ## Phase 5 — Operational Resilience (Lower)
 
-### 5.1 Add Django logging configuration
+### 5.1 Add Django logging configuration ✅ COMPLETED
 
 **Problem**: No logging configuration. Errors in the pipeline are silently swallowed or raised as generic `RuntimeError`.
 
@@ -291,7 +291,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Log at INFO for pipeline progress, WARNING for retries, ERROR for failures
 - Replace bare `RuntimeError` raises with specific exception classes
 
-### 5.2 Add custom exception classes
+### 5.2 Add custom exception classes ✅ COMPLETED
 
 **Problem**: Services raise generic `RuntimeError` for all failure modes — extraction failures, embedding failures, LLM errors are indistinguishable.
 
@@ -347,8 +347,8 @@ These items reduce coupling, enable independent evolution, and fix design proble
 | 2 — Architecture | 7 items | ✅ Complete | High | 3-4 days |
 | 3 — Code Quality | 7 items | ✅ Complete | Medium | 2-3 days |
 | 4 — Testing | 6 items | ✅ Complete | Medium | 2-3 days |
-| 5 — Operational | 6 items | 1/6 done | Lower | 2-3 days |
-| **Total** | **33 items** | **28/33 done** | | **11-16 days** |
+| 5 — Operational | 6 items | 2/6 done | Lower | 2-3 days |
+| **Total** | **33 items** | **29/33 done** | | **11-16 days** |
 
 ---
 

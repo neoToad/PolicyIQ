@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from collections.abc import Iterator
 
@@ -11,6 +12,8 @@ try:
     import anthropic
 except ImportError:  # pragma: no cover
     anthropic = None  # type: ignore
+
+logger = logging.getLogger("queries.generator")
 
 OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
 OLLAMA_GENERATE_MODEL = "llama3.2"
@@ -36,9 +39,11 @@ def _generate_ollama(prompt: str) -> Iterator[str]:
             return
         except (requests.RequestException, json.JSONDecodeError) as exc:
             last_error = exc
+            logger.warning("Generation attempt %d/%d failed: %s", attempt, RETRY_ATTEMPTS, exc)
             if attempt < RETRY_ATTEMPTS:
                 time.sleep(RETRY_DELAY_SECONDS)
 
+    logger.error("Ollama generation service unreachable after %d attempts: %s", RETRY_ATTEMPTS, last_error)
     raise GenerationError(
         "Ollama generation service is unreachable after 3 attempts at http://localhost:11434/api/generate."
     ) from last_error

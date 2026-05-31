@@ -1,8 +1,11 @@
+import logging
 import time
 
 import requests
 
 from documents.exceptions import EmbeddingError
+
+logger = logging.getLogger("documents.embedder")
 
 OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
 OLLAMA_EMBED_MODEL = "nomic-embed-text"
@@ -49,9 +52,11 @@ def _embed_text(text: str) -> list[float]:
             return [x / norm for x in embedding]
         except (requests.RequestException, ValueError) as exc:
             last_error = exc
+            logger.warning("Embedding attempt %d/%d failed: %s", attempt, RETRY_ATTEMPTS, exc)
             if attempt < RETRY_ATTEMPTS:
                 time.sleep(RETRY_DELAY_SECONDS)
 
+    logger.error("Ollama embedding service unreachable after %d attempts: %s", RETRY_ATTEMPTS, last_error)
     raise EmbeddingError(
         "Ollama embedding service is unreachable after 3 attempts at http://localhost:11434/api/embeddings."
     ) from last_error

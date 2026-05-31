@@ -199,3 +199,15 @@
 - Fixed `settings.py` `_is_test_run()` to detect pytest (via `sys.argv[0]`) so SQLite in-memory DB is used under pytest as well as Django's runner
 - Django runner: 72 unit tests pass in 0.04s; pytest runner: 6 pytest tests pass in 1.3s
 - **Improvement beyond spec**: Unified test-database detection means pytest and Django runner both use SQLite without requiring PostgreSQL `CREATEDB` privileges
+
+## [Phase5.1] Add Django logging configuration
+- Added `LOGGING` dict to `settings.py` with:
+  - Console handler (`simple` formatter) and file handler (`RotatingFileHandler` with `verbose` formatter, 5 MB max, 3 backups)
+  - Root logger at INFO level
+  - Named loggers for `documents` and `queries` apps at INFO level with `propagate=False`
+- Added `logger.info()` calls in `documents/services/pipeline.py` for pipeline start, extraction, chunking, and completion milestones
+- Added `logger.warning()` calls in `documents/services/embedder.py` and `queries/services/generator.py` for retry attempt failures
+- Added `logger.error()` calls before final exception raises in embedder and generator for terminal failures
+- Test runs silence documents/queries loggers to ERROR level via `_is_test_run()` detection to reduce noise in test output
+- Created `policyiq/logs/.gitignore` to keep log directory under version control without committing `.log` files
+- **Improvement beyond spec**: ERROR-level logging on terminal failures ensures failures are visible in both console and rotating log files even when the exception is caught upstream

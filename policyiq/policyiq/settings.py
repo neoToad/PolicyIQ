@@ -76,21 +76,6 @@ DATABASES = {
     }
 }
 
-def _is_test_run() -> bool:
-    """Detect Django's test runner or pytest (pytest does not inject 'test' into sys.argv)."""
-    if "test" in sys.argv:
-        return True
-    # When pytest is invoked directly, sys.argv[0] is the pytest executable path.
-    return bool(sys.argv and "pytest" in sys.argv[0])
-
-
-# Use an in-memory SQLite database for tests so they run without PostgreSQL privileges.
-if _is_test_run():
-    DATABASES["default"] = {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
-    }
-
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -128,3 +113,67 @@ CORS_ALLOWED_ORIGINS = [
 
 LLM_BACKEND = os.environ.get("LLM_BACKEND", "ollama")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
+# Logging configuration
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(BASE_DIR / "logs" / "policyiq.log"),
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 3,
+            "formatter": "verbose",
+            "delay": True,
+        },
+    },
+    "root": {
+        "handlers": ["console", "file"],
+        "level": "INFO",
+    },
+    "loggers": {
+        "documents": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "queries": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}
+
+def _is_test_run() -> bool:
+    """Detect Django's test runner or pytest (pytest does not inject 'test' into sys.argv)."""
+    if "test" in sys.argv:
+        return True
+    # When pytest is invoked directly, sys.argv[0] is the pytest executable path.
+    return bool(sys.argv and "pytest" in sys.argv[0])
+
+
+# Use an in-memory SQLite database for tests so they run without PostgreSQL privileges.
+if _is_test_run():
+    DATABASES["default"] = {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": ":memory:",
+    }
+    # Silence noisy service retry logs during test runs.
+    LOGGING["loggers"]["documents"]["level"] = "ERROR"
+    LOGGING["loggers"]["queries"]["level"] = "ERROR"
