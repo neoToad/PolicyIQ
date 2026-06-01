@@ -1,5 +1,4 @@
 import json
-from datetime import UTC
 from unittest import mock
 from uuid import uuid4
 
@@ -7,7 +6,7 @@ from django.test import RequestFactory, SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from queries.views import AskPageView, QueryAPIView
+from queries.views import AskPageView, HealthCheckAPIView, QueryAPIView
 
 
 class AskPageViewTests(SimpleTestCase):
@@ -226,3 +225,67 @@ class QueryAPIViewTests(SimpleTestCase):
         self.assertEqual(citations[0]["page_number"], 3)
         self.assertEqual(citations[0]["similarity_score"], 0.92)
         self.assertEqual(citations[0]["text_preview"], "Coverage is approved for this procedure."[:150])
+
+
+class HealthCheckAPIViewTests(SimpleTestCase):
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = HealthCheckAPIView.as_view()
+
+    @mock.patch("queries.views.health.check_ollama", return_value={"status": "up"})
+    @mock.patch("queries.views.health.check_chromadb", return_value={"status": "up"})
+    @mock.patch("queries.views.health.check_postgresql", return_value={"status": "up"})
+    def test_returns_200_when_all_dependencies_healthy(self, mock_pg, mock_chroma, mock_ollama):
+        request = self.factory.get("/api/health/")
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "healthy")
+        self.assertEqual(
+            response.data["dependencies"],
+            {
+                "postgresql": {"status": "up"},
+                "chromadb": {"status": "up"},
+                "ollama": {"status": "up"},
+            },
+        )
+
+    @mock.patch("queries.views.health.check_ollama", return_value={"status": "down", "error": "refused"})
+    @mock.patch("queries.views.health.check_chromadb", return_value={"status": "up"})
+    @mock.patch("queries.views.health.check_postgresql", return_value={"status": "up"})
+    def test_returns_503_when_any_dependency_down(self, mock_pg, mock_chroma, mock_ollama):
+        request = self.factory.get("/api/health/")
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data["status"], "unhealthy")
+        self.assertEqual(response.data["dependencies"]["ollama"], {"status": "down", "error": "refused"})
+
+    @mock.patch("queries.views.health.check_ollama", return_value={"status": "down", "error": "x"})
+    @mock.patch("queries.views.health.check_chromadb", return_value={"status": "down", "error": "y"})
+    @mock.patch("queries.views.health.check_postgresql", return_value={"status": "down", "error": "z"})
+    def test_reports_all_failures(self, mock_pg, mock_chroma, mock_ollama):
+        request = self.factory.get("/api/health/")
+
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        deps = response.data["dependencies"]
+        self.assertEqual(deps["postgresql"]["error"], "z")
+        self.assertEqual(deps["chromadb"]["error"], "y")
+        self.assertEqual(deps["ollama"]["error"], "x")
+
+    def test_does_not_require_authentication(self):
+        """Health checks must be reachable by unauthenticated monitoring tools."""
+        request = self.factory.get("/api/health/")
+
+        with (
+            mock.patch("queries.views.health.check_postgresql", return_value={"status": "up"}),
+            mock.patch("queries.views.health.check_chromadb", return_value={"status": "up"}),
+            mock.patch("queries.views.health.check_ollama", return_value={"status": "up"}),
+        ):
+            response = self.view(request)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

@@ -73,7 +73,9 @@ def _generate_anthropic(prompt: str) -> Iterator[str]:
                     if text:
                         yield text
     except Exception as exc:
-        raise GenerationError("Anthropic generation service failed. Check your API key and network connection.") from exc
+        raise GenerationError(
+            "Anthropic generation service failed. Check your API key and network connection."
+        ) from exc
 
 
 def generate_response(prompt: str) -> Iterator[str]:

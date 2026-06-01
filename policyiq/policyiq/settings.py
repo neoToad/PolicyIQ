@@ -113,6 +113,7 @@ CORS_ALLOWED_ORIGINS = [
 
 LLM_BACKEND = os.environ.get("LLM_BACKEND", "ollama")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
 # Logging configuration
 LOGGING = {
@@ -159,6 +160,7 @@ LOGGING = {
         },
     },
 }
+
 
 def _is_test_run() -> bool:
     """Detect Django's test runner or pytest (pytest does not inject 'test' into sys.argv)."""

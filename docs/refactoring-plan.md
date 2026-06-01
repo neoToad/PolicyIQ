@@ -1,7 +1,7 @@
 # PolicyIQ Refactoring Plan
 
 > **Scope**: Codebase improvements only — no new features. This plan addresses security vulnerabilities, architectural debt, code quality, and maintainability.
-> **Status**: In progress. Phases 1–2 fully complete; Phase 3 items 3.1–3.3 complete; Phase 4 items 4.1–4.3 complete as side-effects of earlier phases.
+> **Status**: In progress. Phases 1–2 fully complete; Phase 3 items 3.1–3.3 complete; Phase 4 items 4.1–4.3 complete as side-effects of earlier phases. Phase 5: 5.1–5.3 done.
 
 ---
 
@@ -300,7 +300,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
 - Create `queries/exceptions.py` with `RetrievalError`, `GenerationError`
 - Services raise specific exceptions; views catch and return appropriate HTTP status codes
 
-### 5.3 Add health check endpoint
+### 5.3 Add health check endpoint ✅ COMPLETED
 
 **Problem**: No way to verify Ollama or ChromaDB connectivity without running a full query.
 
@@ -347,8 +347,8 @@ These items reduce coupling, enable independent evolution, and fix design proble
 | 2 — Architecture | 7 items | ✅ Complete | High | 3-4 days |
 | 3 — Code Quality | 7 items | ✅ Complete | Medium | 2-3 days |
 | 4 — Testing | 6 items | ✅ Complete | Medium | 2-3 days |
-| 5 — Operational | 6 items | 2/6 done | Lower | 2-3 days |
-| **Total** | **33 items** | **29/33 done** | | **11-16 days** |
+| 5 — Operational | 6 items | 3/6 done | Lower | 2-3 days |
+| **Total** | **33 items** | **30/33 done** | | **11-16 days** |
 
 ---
 

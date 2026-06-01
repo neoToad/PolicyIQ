@@ -22,7 +22,6 @@ from django.test import RequestFactory
 
 from queries.views import AskPageView
 
-
 pytestmark = pytest.mark.django_db
 
 
@@ -36,7 +35,6 @@ class TestAskPageViewGet:
     """Pytest equivalents of AskPageView GET tests."""
 
     def test_renders_form_with_documents(self, ask_view):
-        from datetime import UTC
 
         dt = mock.Mock()
         doc1 = mock.Mock(id=uuid4(), uploaded_at=dt)

@@ -4,6 +4,7 @@ from django.http import HttpRequest, HttpResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.views import View
 from documents.models import Document
+from documents.services.indexer import get_collection
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -11,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from queries.serializers import CitationSerializer, QueryRequestSerializer
+from queries.services import health
 from queries.services.citations import build_citations
 from queries.services.generator import build_prompt, generate_response
 from queries.services.retriever import retrieve_chunks
@@ -88,3 +90,24 @@ class QueryAPIView(APIView):
         response = StreamingHttpResponse(stream(), content_type="text/plain")
         response["X-Citations"] = json.dumps(citation_serializer.data)
         return response
+
+
+class HealthCheckAPIView(APIView):
+    """Unauthenticated endpoint for dependency health checks."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request: Request) -> Response:
+        """Check PostgreSQL, ChromaDB, and Ollama connectivity."""
+        results = {
+            "postgresql": health.check_postgresql(),
+            "chromadb": health.check_chromadb(get_collection),
+            "ollama": health.check_ollama(),
+        }
+        all_healthy = all(dep["status"] == "up" for dep in results.values())
+        status_code = status.HTTP_200_OK if all_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
+        return Response(
+            {"status": "healthy" if all_healthy else "unhealthy", "dependencies": results},
+            status=status_code,
+        )

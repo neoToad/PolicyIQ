@@ -32,7 +32,6 @@ import requests
 from django.conf import settings
 from django.core.files import File
 from django.test import TestCase, override_settings, tag
-
 from documents.models import Document
 from documents.services.indexer import delete_document
 from documents.services.pipeline import ingest_document
@@ -83,9 +82,7 @@ class IngestionQueryRoundTripTests(TestCase):
 
     def test_ingest_and_retrieve_round_trip(self):
         """Ingest a PDF and retrieve relevant chunks via vector search."""
-        pdf_path = self._create_test_pdf(
-            "Insurance coverage includes dental and vision benefits for all employees."
-        )
+        pdf_path = self._create_test_pdf("Insurance coverage includes dental and vision benefits for all employees.")
 
         with open(pdf_path, "rb") as f:
             document = Document.objects.create(

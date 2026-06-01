@@ -211,3 +211,14 @@
 - Test runs silence documents/queries loggers to ERROR level via `_is_test_run()` detection to reduce noise in test output
 - Created `policyiq/logs/.gitignore` to keep log directory under version control without committing `.log` files
 - **Improvement beyond spec**: ERROR-level logging on terminal failures ensures failures are visible in both console and rotating log files even when the exception is caught upstream
+
+## [Phase5.3] Add health check endpoint
+- Created `queries/services/health.py` with three check helpers: `check_postgresql()` (SELECT 1), `check_chromadb(get_collection)` (singleton heartbeat), `check_ollama()` (HTTP GET /api/tags with 2 s timeout)
+- Each helper returns `{"status": "up"}` on success or `{"status": "down", "error": "..."}` on failure — uniform shape makes the view trivial
+- `HealthCheckAPIView` aggregates the three checks at `/api/health/`, returns 200 when all are up, 503 otherwise; unauthenticated so monitoring tools can call it
+- Wired up at both `/api/health/` (project urls) and `queries/urls.py` (`health/` namespace) for forward-compat if a non-`/api/` health route is desired later
+- Added `OLLAMA_BASE_URL` setting (env-overridable) so the health check respects the same configuration as the embedder/generator
+- Added 8 service tests in `queries/tests/test_health.py` covering each check's up/down paths
+- Added 4 view tests in `queries/tests/test_views.py` (`HealthCheckAPIViewTests`): all healthy, partial down, all down, and unauthenticated access
+- All 85 tests pass; ruff clean
+- **Improvement beyond spec**: Extracted health checks into a service module rather than inlining in the view — the view is reduced to a 5-line aggregator, and each check is independently testable. The `check_chromadb` helper accepts the collection getter as a parameter to avoid module-level coupling and make mocking trivial in tests.

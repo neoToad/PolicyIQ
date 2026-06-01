@@ -10,7 +10,7 @@ from documents.views import (
     StaffDocumentReindexView,
     UploadPageView,
 )
-from queries.views import AskPageView
+from queries.views import AskPageView, HealthCheckAPIView
 
 urlpatterns = [
     path("admin/documents/", StaffDocumentListView.as_view(), name="staff-documents"),
@@ -19,6 +19,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/documents/", include("documents.urls")),
     path("api/queries/", include("queries.urls")),
+    path("api/health/", HealthCheckAPIView.as_view(), name="health-check"),
     path("upload/", UploadPageView.as_view(), name="upload-page"),
     path("history/", HistoryPageView.as_view(), name="history-page"),
     path("documents/<uuid:pk>/delete/", DocumentDeleteView.as_view(), name="document-delete"),
