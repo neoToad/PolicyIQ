@@ -311,7 +311,7 @@ These items reduce coupling, enable independent evolution, and fix design proble
   - Ollama: HTTP GET to `/api/tags`
 - Return 200 with component status, or 503 if any dependency is down
 
-### 5.4 Batch embedding requests
+### 5.4 Batch embedding requests ✅ COMPLETED
 
 **Problem**: `embed_chunks()` makes one HTTP request per chunk. For a 50-page PDF (~100 chunks), this is 100 sequential HTTP calls.
 
@@ -347,8 +347,8 @@ These items reduce coupling, enable independent evolution, and fix design proble
 | 2 — Architecture | 7 items | ✅ Complete | High | 3-4 days |
 | 3 — Code Quality | 7 items | ✅ Complete | Medium | 2-3 days |
 | 4 — Testing | 6 items | ✅ Complete | Medium | 2-3 days |
-| 5 — Operational | 6 items | 3/6 done | Lower | 2-3 days |
-| **Total** | **33 items** | **30/33 done** | | **11-16 days** |
+| 5 — Operational | 6 items | 4/6 done | Lower | 2-3 days |
+| **Total** | **33 items** | **31/33 done** | | **11-16 days** |
 
 ---
 

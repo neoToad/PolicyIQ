@@ -63,15 +63,84 @@ class ChunkPagesTests(SimpleTestCase):
 
 class EmbedderTests(SimpleTestCase):
     @mock.patch("documents.services.embedder.requests.post")
-    def test_embed_chunks_adds_embedding_to_each_chunk(self, mock_post):
+    def test_embed_chunks_sends_all_in_one_batch_when_under_batch_size(self, mock_post):
+        """Chunks below batch_size are sent as a single batched request."""
+        mock_response = mock.Mock(
+            raise_for_status=mock.Mock(),
+            json=mock.Mock(return_value={"embeddings": [[3.0, 4.0], [0.0, 1.0]]}),
+        )
+        mock_post.return_value = mock_response
+        chunks = [
+            {"text": "first", "page_number": 1, "token_offset": 0},
+            {"text": "second", "page_number": 1, "token_offset": 50},
+        ]
+
+        result = embed_chunks(chunks, batch_size=32)
+
+        self.assertEqual(result[0]["embedding"], [0.6, 0.8])
+        self.assertEqual(result[1]["embedding"], [0.0, 1.0])
+        self.assertEqual(mock_post.call_count, 1)
+        # The batched request should send both texts in a single "input" list.
+        kwargs = mock_post.call_args.kwargs
+        self.assertEqual(kwargs["json"]["input"], ["first", "second"])
+        self.assertEqual(kwargs["json"]["model"], "nomic-embed-text")
+
+    @mock.patch("documents.services.embedder.requests.post")
+    def test_embed_chunks_splits_into_multiple_batches_when_above_batch_size(self, mock_post):
+        """Chunks above batch_size are split into multiple batched requests."""
         mock_post.side_effect = [
             mock.Mock(
                 raise_for_status=mock.Mock(),
-                json=mock.Mock(return_value={"embedding": [3.0, 4.0]}),
+                json=mock.Mock(return_value={"embeddings": [[1.0, 0.0]]}),
             ),
             mock.Mock(
                 raise_for_status=mock.Mock(),
-                json=mock.Mock(return_value={"embedding": [0.0, 1.0]}),
+                json=mock.Mock(return_value={"embeddings": [[0.0, 1.0]]}),
+            ),
+            mock.Mock(
+                raise_for_status=mock.Mock(),
+                json=mock.Mock(return_value={"embeddings": [[1.0, 1.0]]}),
+            ),
+        ]
+        chunks = [
+            {"text": "a", "page_number": 1, "token_offset": 0},
+            {"text": "b", "page_number": 1, "token_offset": 10},
+            {"text": "c", "page_number": 1, "token_offset": 20},
+        ]
+
+        result = embed_chunks(chunks, batch_size=1)
+
+        # Each chunk sent in its own batch of 1.
+        self.assertEqual(mock_post.call_count, 3)
+        # First chunk is unit-normalized (already unit length); others L2-normalized.
+        self.assertEqual(result[0]["embedding"], [1.0, 0.0])
+        self.assertEqual(result[1]["embedding"], [0.0, 1.0])
+        self.assertEqual(result[2]["embedding"], [0.7071067811865475, 0.7071067811865475])
+
+    @mock.patch("documents.services.embedder.requests.post")
+    def test_embed_chunks_returns_empty_list_for_empty_input(self, mock_post):
+        """No chunks means no HTTP calls and an empty result."""
+        result = embed_chunks([])
+
+        self.assertEqual(result, [])
+        self.assertEqual(mock_post.call_count, 0)
+
+    @mock.patch("documents.services.embedder.requests.post")
+    def test_embed_chunks_falls_back_to_sequential_when_batch_fails(self, mock_post):
+        """If the batch endpoint fails, fall back to per-chunk sequential calls."""
+        # Batched path retries 3 times then raises; fallback path succeeds per-chunk.
+        # 3 batched failures + 2 sequential successes = 5 calls.
+        mock_post.side_effect = [
+            requests.RequestException("batch endpoint broken"),
+            requests.RequestException("batch endpoint broken"),
+            requests.RequestException("batch endpoint broken"),
+            mock.Mock(
+                raise_for_status=mock.Mock(),
+                json=mock.Mock(return_value={"embeddings": [[3.0, 4.0]]}),
+            ),
+            mock.Mock(
+                raise_for_status=mock.Mock(),
+                json=mock.Mock(return_value={"embeddings": [[0.0, 1.0]]}),
             ),
         ]
         chunks = [
@@ -79,11 +148,32 @@ class EmbedderTests(SimpleTestCase):
             {"text": "second", "page_number": 1, "token_offset": 50},
         ]
 
-        result = embed_chunks(chunks)
+        with mock.patch("documents.services.embedder.time.sleep"):
+            result = embed_chunks(chunks, batch_size=32)
 
+        # 3 batched retries + 2 fallback calls = 5 total calls.
+        self.assertEqual(mock_post.call_count, 5)
         self.assertEqual(result[0]["embedding"], [0.6, 0.8])
         self.assertEqual(result[1]["embedding"], [0.0, 1.0])
-        self.assertEqual(mock_post.call_count, 2)
+        # The first 3 calls sent a list; the fallback calls sent single-element lists.
+        first_kwargs = mock_post.call_args_list[0].kwargs
+        fourth_kwargs = mock_post.call_args_list[3].kwargs
+        fifth_kwargs = mock_post.call_args_list[4].kwargs
+        self.assertEqual(first_kwargs["json"]["input"], ["first", "second"])
+        self.assertEqual(fourth_kwargs["json"]["input"], "first")
+        self.assertEqual(fifth_kwargs["json"]["input"], "second")
+
+    @mock.patch("documents.services.embedder.time.sleep")
+    @mock.patch("documents.services.embedder.requests.post")
+    def test_embed_chunks_raises_clear_error_when_both_batch_and_fallback_fail(self, mock_post, mock_sleep):
+        """If both batched and per-chunk fallback fail, raise EmbeddingError."""
+        mock_post.side_effect = requests.RequestException("unreachable")
+
+        with self.assertRaisesRegex(EmbeddingError, "Ollama"):
+            embed_chunks([{"text": "only", "page_number": 1, "token_offset": 0}])
+
+        # 3 batched retries + 3 fallback retries = 6 calls
+        self.assertEqual(mock_post.call_count, 6)
 
     @mock.patch("documents.services.embedder.time.sleep")
     @mock.patch("documents.services.embedder.requests.post")
@@ -92,7 +182,7 @@ class EmbedderTests(SimpleTestCase):
             requests.RequestException("connection dropped"),
             mock.Mock(
                 raise_for_status=mock.Mock(),
-                json=mock.Mock(return_value={"embedding": [1.0]}),
+                json=mock.Mock(return_value={"embeddings": [[1.0]]}),
             ),
         ]
 

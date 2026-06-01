@@ -222,3 +222,17 @@
 - Added 4 view tests in `queries/tests/test_views.py` (`HealthCheckAPIViewTests`): all healthy, partial down, all down, and unauthenticated access
 - All 85 tests pass; ruff clean
 - **Improvement beyond spec**: Extracted health checks into a service module rather than inlining in the view — the view is reduced to a 5-line aggregator, and each check is independently testable. The `check_chromadb` helper accepts the collection getter as a parameter to avoid module-level coupling and make mocking trivial in tests.
+
+## [Phase5.4] Batch embedding requests
+- Switched `embed_chunks()` from the legacy `/api/embeddings` endpoint to the modern `/api/embed` endpoint, which accepts a list of inputs and returns a list of embeddings
+- Default `batch_size=32` collapses N sequential HTTP calls into `ceil(N / batch_size)` calls — a 50-page PDF (~100 chunks) goes from 100 HTTP calls to ~4
+- New `_embed_batch_with_retry()` helper handles the batched path with the same retry/backoff logic as before
+- On batch failure (3 retries exhausted), the function falls back to per-chunk sequential calls so a partial outage of the batch endpoint doesn't block ingestion entirely
+- Unified the single-text path on the same `/api/embed` endpoint (using `input: text` rather than the legacy `prompt: text` field) — no legacy code path needed
+- Extracted `_normalize()` helper to share L2-normalization logic between batch and single paths
+- Empty chunk list short-circuits to `[]` without making any HTTP calls
+- Added 4 new embedder tests: batched single-call, multi-batch splitting, empty input, sequential fallback, both-fail EmbeddingError
+- Updated `test_embed_query_retries_then_succeeds` mock to the new response shape (`{"embeddings": [[1.0]]}`)
+- All 89 tests pass (85 existing + 4 new); ruff clean
+- **Improvement beyond spec**: Empty-input short-circuit avoids an unnecessary empty POST to Ollama. Validates batch response shape (`len(embeddings) == len(texts)`) and raises a clear `ValueError` for malformed responses — a silent length mismatch could otherwise return wrong vectors paired with wrong chunks.
+- **Cleanup**: Also committed the previously-uncommitted `STATICFILES_DIRS` and `STATIC_ROOT` settings that were added during Phase 3.6 (CSS extraction) but never staged. These are needed for `collectstatic` to function correctly.
