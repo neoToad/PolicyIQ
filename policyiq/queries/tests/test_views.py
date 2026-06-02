@@ -2,7 +2,7 @@ import json
 from unittest import mock
 from uuid import uuid4
 
-from django.test import RequestFactory, SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -289,3 +289,72 @@ class HealthCheckAPIViewTests(SimpleTestCase):
             response = self.view(request)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class QueryThrottleTests(SimpleTestCase):
+    """Verify per-view throttling on the query endpoint."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        from django.test import override_settings
+
+        cache.clear()  # ensure no throttle state from previous tests
+        self.factory = APIRequestFactory()
+        self.view = QueryAPIView.as_view()
+        self.user = mock.Mock()
+        self.user.is_authenticated = True
+        self.user.pk = 1
+        self.user.id = 1
+
+    def _make_query_request(self):
+        return self.factory.post("/api/queries/", {"question": "Is it covered?"})
+
+    @override_settings(
+        REST_FRAMEWORK={
+            "DEFAULT_AUTHENTICATION_CLASSES": [
+                "rest_framework.authentication.SessionAuthentication",
+                "rest_framework.authentication.TokenAuthentication",
+            ],
+            "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+            "DEFAULT_THROTTLE_RATES": {
+                "query_anon": "30/hour",
+                "query_user": "2/minute",
+                "upload_anon": "5/hour",
+                "upload_user": "30/hour",
+            },
+        }
+    )
+    @mock.patch("queries.views.generate_response")
+    @mock.patch("queries.views.build_prompt")
+    @mock.patch("queries.views.retrieve_chunks")
+    def test_authenticated_user_is_throttled_after_limit(self, mock_retrieve, mock_build_prompt, mock_generate):
+        """Authenticated users exceeding query_user rate get 429."""
+        mock_retrieve.return_value = [
+            {"text": "yes", "page_number": 1, "document_name": "p.pdf", "similarity_score": 0.9}
+        ]
+        mock_build_prompt.return_value = "prompt"
+        mock_generate.return_value = iter(["Yes"])
+
+        for _ in range(2):
+            request = self._make_query_request()
+            force_authenticate(request, user=self.user)
+            response = self.view(request)
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        # Third request should be throttled.
+        request = self._make_query_request()
+        force_authenticate(request, user=self.user)
+        response = self.view(request)
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_view_exposes_throttle_classes(self):
+        """QueryAPIView must declare the query throttles for protection."""
+        from queries.throttles import QueryAnonRateThrottle, QueryUserRateThrottle
+
+        self.assertIn(QueryAnonRateThrottle, QueryAPIView.throttle_classes)
+        self.assertIn(QueryUserRateThrottle, QueryAPIView.throttle_classes)
+
+    def test_health_check_is_not_throttled(self):
+        """The health-check endpoint must remain unthrottled so monitors can poll it."""
+        # HealthCheckAPIView has no throttle_classes (and no DEFAULT_THROTTLE_CLASSES).
+        self.assertEqual(HealthCheckAPIView.throttle_classes, ())

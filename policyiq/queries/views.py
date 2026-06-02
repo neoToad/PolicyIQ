@@ -16,6 +16,7 @@ from queries.services import health
 from queries.services.citations import build_citations
 from queries.services.generator import build_prompt, generate_response
 from queries.services.retriever import retrieve_chunks
+from queries.throttles import QueryAnonRateThrottle, QueryUserRateThrottle
 
 
 class AskPageView(View):
@@ -59,6 +60,7 @@ class QueryAPIView(APIView):
     """Authenticated API endpoint for querying documents with RAG."""
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [QueryAnonRateThrottle, QueryUserRateThrottle]
 
     def post(self, request: Request) -> Response:
         """Validate request, retrieve chunks, and stream an LLM answer with citations."""

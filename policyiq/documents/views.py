@@ -18,6 +18,7 @@ from documents.models import Chunk, Document
 from documents.serializers import UploadResultSerializer
 from documents.services.indexer import delete_document
 from documents.services.pipeline import ingest_document
+from documents.throttles import UploadAnonRateThrottle, UploadUserRateThrottle
 
 
 def _validate_pdf(upload: UploadedFile) -> str | None:
@@ -204,6 +205,7 @@ class DocumentUploadAPIView(APIView):
     """Authenticated API endpoint for uploading PDF documents."""
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [UploadAnonRateThrottle, UploadUserRateThrottle]
 
     def post(self, request: Request) -> Response:
         """Validate and ingest uploaded PDFs, returning structured results."""

@@ -96,6 +96,17 @@ MEDIA_ROOT = BASE_DIR / "media"
 CHROMA_PERSIST_DIR = BASE_DIR / "chroma"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+LLM_BACKEND = os.environ.get("LLM_BACKEND", "ollama")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+# Throttle rates are env-overridable so ops can tune limits without code changes.
+# Format is "<count>/<period>" where period is `s`, `m`, `h`, or `d`.
+THROTTLE_QUERY_ANON = os.environ.get("THROTTLE_QUERY_ANON", "30/hour")
+THROTTLE_QUERY_USER = os.environ.get("THROTTLE_QUERY_USER", "120/hour")
+THROTTLE_UPLOAD_ANON = os.environ.get("THROTTLE_UPLOAD_ANON", "5/hour")
+THROTTLE_UPLOAD_USER = os.environ.get("THROTTLE_UPLOAD_USER", "30/hour")
+
 # Django REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -105,6 +116,12 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_THROTTLE_RATES": {
+        "query_anon": THROTTLE_QUERY_ANON,
+        "query_user": THROTTLE_QUERY_USER,
+        "upload_anon": THROTTLE_UPLOAD_ANON,
+        "upload_user": THROTTLE_UPLOAD_USER,
+    },
 }
 
 CORS_ALLOWED_ORIGINS = [
@@ -112,10 +129,6 @@ CORS_ALLOWED_ORIGINS = [
     for origin in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
     if origin.strip()
 ]
-
-LLM_BACKEND = os.environ.get("LLM_BACKEND", "ollama")
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 
 # Logging configuration
 LOGGING = {

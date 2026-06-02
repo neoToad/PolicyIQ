@@ -346,3 +346,114 @@ class CSRFTests(SimpleTestCase):
         # Token auth bypasses CSRF → we get 400 (missing file), not 403 (CSRF failure).
         self.assertEqual(response.status_code, 400)
         mock_auth.assert_called_once()
+
+
+class UploadThrottleTests(TestCase):
+    """Verify per-view throttling on the upload endpoint."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        from rest_framework.test import APIRequestFactory, force_authenticate
+
+        cache.clear()  # ensure no throttle state from previous tests
+        self.factory = APIRequestFactory()
+        self.view = DocumentUploadAPIView.as_view()
+        self.user = mock.Mock()
+        self.user.is_authenticated = True
+        self.user.pk = 1
+        self.user.id = 1
+
+    def _make_upload_request(self):
+        upload = SimpleUploadedFile(
+            "policy.pdf",
+            b"%PDF-1.4 fake content",
+            content_type="application/pdf",
+        )
+        return self.factory.post(
+            "/api/documents/upload/",
+            {"file": upload},
+            format="multipart",
+        )
+
+    @override_settings(
+        REST_FRAMEWORK={
+            "DEFAULT_AUTHENTICATION_CLASSES": [
+                "rest_framework.authentication.SessionAuthentication",
+                "rest_framework.authentication.TokenAuthentication",
+            ],
+            "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+            "DEFAULT_THROTTLE_RATES": {
+                "query_anon": "30/hour",
+                "query_user": "120/hour",
+                "upload_anon": "2/minute",
+                "upload_user": "2/minute",
+            },
+        }
+    )
+    @mock.patch("documents.views.ingest_document")
+    @mock.patch("documents.views.default_storage")
+    def test_authenticated_user_is_throttled_after_limit(self, mock_storage, mock_ingest):
+        """Authenticated users exceeding upload_user rate get 429."""
+        mock_storage.save.return_value = "documents/_tmp_policy.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
+
+        def _ingest_side_effect(document, file_path=None):
+            document.page_count = 1
+            document.chunk_count = 1
+            return {}
+
+        mock_ingest.side_effect = _ingest_side_effect
+
+        for _ in range(2):
+            request = self._make_upload_request()
+            force_authenticate(request, user=self.user)
+            response = self.view(request)
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        # Third request should be throttled.
+        request = self._make_upload_request()
+        force_authenticate(request, user=self.user)
+        response = self.view(request)
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    @override_settings(
+        REST_FRAMEWORK={
+            "DEFAULT_AUTHENTICATION_CLASSES": [
+                "rest_framework.authentication.SessionAuthentication",
+                "rest_framework.authentication.TokenAuthentication",
+            ],
+            "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+            "DEFAULT_THROTTLE_RATES": {
+                "query_anon": "30/hour",
+                "query_user": "120/hour",
+                "upload_anon": "1/minute",
+                "upload_user": "2/minute",
+            },
+        }
+    )
+    def test_anonymous_requests_are_throttled_via_upload_anon_scope(self):
+        """Anonymous users (no auth) are throttled by the upload_anon scope."""
+        # DocumentUploadAPIView requires IsAuthenticated so an anonymous request
+        # would normally get 401/403, but we test the throttle chain by patching
+        # permission_classes away and confirming the throttle fires first.
+        from rest_framework.permissions import AllowAny
+
+        with mock.patch.object(DocumentUploadAPIView, "permission_classes", [AllowAny]):
+            # First request consumes the single allowed hit.
+            request = self._make_upload_request()
+            response = self.view(request)
+            # Without auth, the throttle counts the request by IP. Either auth
+            # rejects (401/403) or throttle counts — both consume the slot.
+            self.assertIn(response.status_code, (status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN))
+
+            # Second request should be throttled (anonymous scope was exhausted).
+            request = self._make_upload_request()
+            response = self.view(request)
+            self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_view_exposes_throttle_classes(self):
+        """DocumentUploadAPIView must declare the upload throttles for protection."""
+        from documents.throttles import UploadAnonRateThrottle, UploadUserRateThrottle
+
+        self.assertIn(UploadAnonRateThrottle, DocumentUploadAPIView.throttle_classes)
+        self.assertIn(UploadUserRateThrottle, DocumentUploadAPIView.throttle_classes)
