@@ -1,4 +1,9 @@
+import logging
+import time
+
 import tiktoken
+
+logger = logging.getLogger("documents.chunker")
 
 
 def chunk_pages(pages: list[dict], chunk_size: int = 500, overlap: int = 50) -> list[dict]:
@@ -10,6 +15,7 @@ def chunk_pages(pages: list[dict], chunk_size: int = 500, overlap: int = 50) -> 
     if overlap >= chunk_size:
         raise ValueError("overlap must be smaller than chunk_size")
 
+    t0 = time.monotonic()
     encoding = tiktoken.get_encoding("cl100k_base")
     all_tokens = []
     token_page_numbers: list[int] = []
@@ -22,6 +28,7 @@ def chunk_pages(pages: list[dict], chunk_size: int = 500, overlap: int = 50) -> 
         token_page_numbers.extend([page_number] * len(page_tokens))
 
     if not all_tokens:
+        logger.info("Created 0 chunks (no tokens) in %.2fs", time.monotonic() - t0)
         return []
 
     step = chunk_size - overlap
@@ -39,5 +46,19 @@ def chunk_pages(pages: list[dict], chunk_size: int = 500, overlap: int = 50) -> 
         )
         if end == len(all_tokens):
             break
+
+    elapsed = time.monotonic() - t0
+    char_lens = [len(c["text"]) for c in chunks]
+    avg_chars = sum(char_lens) // len(char_lens) if char_lens else 0
+    min_chars = min(char_lens) if char_lens else 0
+    max_chars = max(char_lens) if char_lens else 0
+    logger.info(
+        "Created %d chunks (avg %d chars, min %d, max %d) in %.2fs",
+        len(chunks),
+        avg_chars,
+        min_chars,
+        max_chars,
+        elapsed,
+    )
 
     return chunks

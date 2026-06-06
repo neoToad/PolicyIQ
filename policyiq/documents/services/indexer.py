@@ -1,8 +1,12 @@
 import functools
+import logging
+import time
 from pathlib import Path
 
 import chromadb
 from django.conf import settings
+
+logger = logging.getLogger("documents.indexer")
 
 
 def _get_persist_dir() -> str:
@@ -34,25 +38,44 @@ def index_document(document_id: str, chunks: list[dict], document_name: str = ""
     Returns:
         The number of chunks indexed.
     """
-    collection = get_collection()
-    ids = [f"{document_id}:{chunk['token_offset']}" for chunk in chunks]
-    embeddings = [chunk["embedding"] for chunk in chunks]
-    documents = [chunk["text"] for chunk in chunks]
-    metadatas = [
-        {
-            "document_id": document_id,
-            "document_name": document_name,
-            "page_number": chunk["page_number"],
-            "token_offset": chunk["token_offset"],
-        }
-        for chunk in chunks
-    ]
+    t0 = time.monotonic()
+    try:
+        collection = get_collection()
+        ids = [f"{document_id}:{chunk['token_offset']}" for chunk in chunks]
+        embeddings = [chunk["embedding"] for chunk in chunks]
+        documents = [chunk["text"] for chunk in chunks]
+        metadatas = [
+            {
+                "document_id": document_id,
+                "document_name": document_name,
+                "page_number": chunk["page_number"],
+                "token_offset": chunk["token_offset"],
+            }
+            for chunk in chunks
+        ]
 
-    collection.add(
-        ids=ids,
-        embeddings=embeddings,
-        documents=documents,
-        metadatas=metadatas,
+        collection.add(
+            ids=ids,
+            embeddings=embeddings,
+            documents=documents,
+            metadatas=metadatas,
+        )
+    except Exception as exc:
+        elapsed = time.monotonic() - t0
+        logger.error(
+            "Failed to index %d vectors for document_id=%s after %.2fs: %s",
+            len(chunks),
+            document_id,
+            elapsed,
+            type(exc).__name__,
+        )
+        raise
+    elapsed = time.monotonic() - t0
+    logger.info(
+        "Indexed %d vectors in collection for document_id=%s in %.2fs",
+        len(chunks),
+        document_id,
+        elapsed,
     )
     return len(chunks)
 

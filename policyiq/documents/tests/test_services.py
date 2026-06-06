@@ -6,6 +6,7 @@ from django.test import SimpleTestCase
 from documents.exceptions import EmbeddingError
 from documents.services.chunker import chunk_pages
 from documents.services.embedder import embed_chunks, embed_query
+from documents.services.extractor import extract_pages
 from documents.services.indexer import delete_document, get_collection, index_document
 
 
@@ -266,3 +267,95 @@ class IndexerTests(SimpleTestCase):
         delete_document("doc-456")
 
         mock_collection.delete.assert_called_once_with(where={"document_id": "doc-456"})
+
+
+class ExtractorLoggingTests(SimpleTestCase):
+    @mock.patch("documents.services.extractor.fitz.open")
+    def test_extractor_logs_pages_extracted_with_timing(self, mock_fitz_open):
+        """Successful extraction emits an info line with page count and duration."""
+        mock_doc = mock.MagicMock()
+        mock_doc.__iter__.return_value = iter([])
+        mock_fitz_open.return_value.__enter__.return_value = mock_doc
+
+        with self.assertLogs("documents.extractor", level="INFO") as cm:
+            extract_pages("/tmp/policy.pdf")
+
+        info_lines = [line for line in cm.output if "Extracted" in line and "policy.pdf" in line]
+        self.assertEqual(len(info_lines), 1)
+        # The line includes a duration ("in T.TTs").
+        self.assertIn("in ", info_lines[0])
+
+
+class ChunkerLoggingTests(SimpleTestCase):
+    @mock.patch("documents.services.chunker.tiktoken.get_encoding")
+    def test_chunker_logs_chunks_created_with_stats(self, mock_get_encoding):
+        """Successful chunking emits an info line with chunk count and stats."""
+        mock_get_encoding.return_value = FakeEncoding()
+        pages = [{"page_number": 1, "cleaned_text": "a b c d e f"}]
+
+        with self.assertLogs("documents.chunker", level="INFO") as cm:
+            chunk_pages(pages, chunk_size=4, overlap=1)
+
+        info_lines = [line for line in cm.output if "Created" in line and "chunks" in line]
+        self.assertEqual(len(info_lines), 1)
+        # Stats: chunk count and a duration.
+        self.assertIn("in ", info_lines[0])
+
+
+class IndexerLoggingTests(SimpleTestCase):
+    def setUp(self):
+        # Ensure the singleton client cache is cleared between tests.
+        from documents.services.indexer import get_chroma_client
+
+        get_chroma_client.cache_clear()
+
+    @mock.patch("documents.services.indexer.get_collection")
+    def test_indexer_logs_vectors_indexed_with_timing(self, mock_get_collection):
+        """Successful indexing emits an info line with vector count and duration."""
+        mock_collection = mock.Mock()
+        mock_get_collection.return_value = mock_collection
+        chunks = [
+            {
+                "text": "chunk one",
+                "embedding": [0.1, 0.2],
+                "page_number": 1,
+                "token_offset": 0,
+            },
+            {
+                "text": "chunk two",
+                "embedding": [0.3, 0.4],
+                "page_number": 2,
+                "token_offset": 128,
+            },
+        ]
+
+        with self.assertLogs("documents.indexer", level="INFO") as cm:
+            index_document("doc-123", chunks, document_name="Test Policy.pdf")
+
+        info_lines = [line for line in cm.output if "Indexed" in line and "doc-123" in line]
+        self.assertEqual(len(info_lines), 1)
+        # The line includes a duration.
+        self.assertIn("in ", info_lines[0])
+
+    @mock.patch("documents.services.indexer.get_collection")
+    def test_indexer_logs_error_with_exception_type_on_failure(self, mock_get_collection):
+        """When collection.add raises, the indexer logs an ERROR line with the exception type."""
+        mock_collection = mock.Mock()
+        mock_collection.add.side_effect = RuntimeError("ChromaDB write failed")
+        mock_get_collection.return_value = mock_collection
+        chunks = [
+            {
+                "text": "chunk one",
+                "embedding": [0.1, 0.2],
+                "page_number": 1,
+                "token_offset": 0,
+            },
+        ]
+
+        with self.assertLogs("documents.indexer", level="ERROR") as cm:
+            with self.assertRaises(RuntimeError):
+                index_document("doc-fail", chunks, document_name="Test Policy.pdf")
+
+        error_lines = [line for line in cm.output if "Failed to index" in line and "doc-fail" in line]
+        self.assertEqual(len(error_lines), 1)
+        self.assertIn("RuntimeError", error_lines[0])

@@ -427,6 +427,28 @@
 - **Improvement beyond spec**: Added a NEW `Embedded N chunks for X in T.TTs` info line — the original 4 pipeline info lines did not include an embed-stage line (the embedder logged retries/failures, but the success path was silent at the pipeline layer). This closes the gap that made "was it the embedder or the indexer?" hard to answer from the log.
 - **Improvement beyond spec**: Added a NEW `Indexed N chunks in collection for X in T.TTs` info line for the same reason — the indexer previously had no logger of its own, so the pipeline was silent on the final write step.
 
+## [Phase7.6] Add `documents.extractor` / `documents.chunker` / `documents.indexer` loggers
+- Created 3 new module-level loggers: `documents.extractor`, `documents.chunker`, `documents.indexer`
+- All inherit handlers from the existing `documents` parent logger — no new entries in `LOGGING["loggers"]`
+- `extractor.py`:
+  - `Extracted N pages from X in T.TTs` info line on success
+  - `Failed to extract pages from X after T s: <TypeName>` ERROR line on FileNotFoundError / fitz errors
+- `chunker.py`:
+  - `Created N chunks (avg X chars, min Y, max Z) in T.TTs` info line on success (new stats: avg/min/max char counts)
+  - `Created 0 chunks (no tokens) in T.TTs` info line on the empty-input path
+- `indexer.py`:
+  - `Indexed N vectors in collection for document_id=X in T.TTs` info line on success
+  - `Failed to index N vectors for document_id=X after T s: <TypeName>` ERROR line on any exception (re-raises after logging)
+- Added 4 new tests in `policyiq/documents/tests/test_services.py`:
+  - `ExtractorLoggingTests.test_extractor_logs_pages_extracted_with_timing`
+  - `ChunkerLoggingTests.test_chunker_logs_chunks_created_with_stats`
+  - `IndexerLoggingTests.test_indexer_logs_vectors_indexed_with_timing`
+  - `IndexerLoggingTests.test_indexer_logs_error_with_exception_type_on_failure`
+- All 139 tests pass (135 + 4 new)
+- **Improvement beyond spec**: Added avg/min/max char stats to the chunker log line (per the plan §2.2 example: "Created 87 chunks from policy.pdf (avg 612 chars, min 41, max 1480)") — operators can spot a chunk size regression from the log alone without re-running ingestion
+- **Improvement beyond spec**: The indexer's error line is also useful for reindex failures (not just upload failures) — the `StaffDocumentReindexView` flow now also produces this log line, which previously had no indexer-level visibility
+- **Improvement beyond spec**: Per the plan §2.10, embedder.py success path stays silent. Confirmed: no new code in `embedder.py`; the pipeline's new "Embedded N chunks" line covers the upload-path success case, and the retriever's "Embedded query" line covers the ask-path case.
+
 ---
 
 ## Build summary

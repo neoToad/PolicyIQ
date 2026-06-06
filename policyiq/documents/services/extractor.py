@@ -1,7 +1,11 @@
+import logging
 import re
+import time
 from collections import Counter
 
 import fitz
+
+logger = logging.getLogger("documents.extractor")
 
 
 def extract_pages(pdf_path: str) -> list[dict]:
@@ -17,16 +21,29 @@ def extract_pages(pdf_path: str) -> list[dict]:
         FileNotFoundError: If the file does not exist.
         ValueError: If the file is not a valid PDF.
     """
+    t0 = time.monotonic()
     try:
         with fitz.open(pdf_path) as doc:
-            return [
+            pages = [
                 {"page_number": page_number, "raw_text": page.get_text()}
                 for page_number, page in enumerate(doc, start=1)
             ]
     except FileNotFoundError as exc:
+        elapsed = time.monotonic() - t0
+        logger.error("Failed to extract pages from %s after %.2fs: FileNotFoundError", pdf_path, elapsed)
         raise FileNotFoundError(f"PDF file not found: {pdf_path}") from exc
     except (fitz.FileDataError, fitz.EmptyFileError) as exc:
+        elapsed = time.monotonic() - t0
+        logger.error(
+            "Failed to extract pages from %s after %.2fs: %s",
+            pdf_path,
+            elapsed,
+            type(exc).__name__,
+        )
         raise ValueError(f"Invalid or corrupted PDF: {pdf_path}") from exc
+    elapsed = time.monotonic() - t0
+    logger.info("Extracted %d pages from %s in %.2fs", len(pages), pdf_path, elapsed)
+    return pages
 
 
 PAGE_ARTIFACT_PATTERN = re.compile(r"^page\s+\d+\s+of\s+\d+$", re.IGNORECASE)

@@ -1,36 +1,35 @@
 # Current Task
 
-**Build status: IN PROGRESS — Phase 7 (Logging improvements), Step 7.5**
+**Build status: IN PROGRESS — Phase 7 (Logging improvements), Step 7.6**
 
 ## Active step
-**Step 7.5 — Add stage timing + failure logging to `documents.pipeline`**
+**Step 7.6 — Add `documents.extractor` / `documents.chunker` / `documents.indexer` loggers + info/error lines**
 
 ## What is happening now
-- TDD red phase: creating new `policyiq/documents/tests/test_pipeline.py`
-  with `PipelineLoggingTests`. Tests per the plan §2.8:
-  1. `test_pipeline_logs_stage_lines_with_timing` — each stage's
-     logger emits its info line with a duration field
-  2. `test_pipeline_logs_failure_at_correct_stage` — chunker raises
-     `ChunkingError`; assert the error line identifies the stage + type
-  3. `test_pipeline_logs_completion_summary` — final "Ingestion
-     complete" line on success includes the duration
-- The existing `ingest_document` has 4 info lines; we need to add
-  `in T.TTs` suffixes (matching the pattern from other steps) and
-  wrap the whole thing in a try/except for failure logging
-- The pipeline's existing 4 logger.info lines already log; need to
-  augment with stage-level timing
+- TDD red phase: writing 3 new tests in
+  `policyiq/documents/tests/test_services.py` (extending the existing
+  service-test file — one test per service, plus an error test for the
+  indexer):
+  1. `test_extractor_logs_pages_extracted_with_timing` — info line on success
+  2. `test_chunker_logs_chunks_created_with_stats` — info line on success
+  3. `test_indexer_logs_vectors_indexed_with_timing` — info line on success
+  4. `test_indexer_logs_error_with_exception_type_on_failure` — error line
+- Per the plan §2.10, embedder.py success path stays silent (the pipeline
+  already logs at the embed stage). Only the 3 above modules need new
+  module-level loggers.
 
 ## TDD rules in effect
 - Red → confirm red → green → refactor → commit
-- New test file is `test_pipeline.py` (per plan §2.3) — separate from
-  `test_services.py` to follow the `test_<service>.py` convention
+- All log lines go through `assertLogs("documents.{extractor,chunker,indexer}", level="INFO")`
 
 ## Blockers / decisions
-- Decision: Use the existing `documents.pipeline` logger (no new module
-  logger) and add timing info to the existing 4 info lines
-- Need `ChunkingError` exception class — verify it exists in
-  `documents/exceptions.py` (was added in Phase 5.2 per CHANGELOG)
+- Decision: Add a single `ChunkingError`-style error path test for the
+  indexer (the plan mentions both success and error lines for indexer).
+  The extractor's existing code re-raises built-in exceptions
+  (FileNotFoundError, ValueError) and doesn't have a custom
+  ExtractionError path — so we don't need a new "extractor error" test
+  beyond what the pipeline failure test already covers.
 
 ## Next step
-**Step 7.6 — extractor/chunker/indexer logger creation + lines + tests**
-(one file at a time, per the plan)
+**Step 7.7 — documents.views upload logging + tests** (the view-layer
+narrative: received → validated → wrote → dispatched → failure)
