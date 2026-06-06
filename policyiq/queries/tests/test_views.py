@@ -362,3 +362,168 @@ class QueryThrottleTests(SimpleTestCase):
         # HealthCheckAPIView explicitly sets throttle_classes = [] so monitors
         # can poll freely without consuming any user/anon throttle budget.
         self.assertEqual(HealthCheckAPIView.throttle_classes, [])
+
+
+class AskPageViewLoggingTests(SimpleTestCase):
+    """Tests for the `queries.views` logger on AskPageView."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.view = AskPageView.as_view()
+
+    @mock.patch("queries.views.generate_response")
+    @mock.patch("queries.views.build_prompt")
+    @mock.patch("queries.views.retrieve_chunks")
+    def test_post_logs_received_line_with_truncated_question(self, mock_retrieve, mock_build_prompt, mock_generate):
+        """`Query received: "..."` line includes the truncated question and username."""
+        mock_retrieve.return_value = []
+        mock_build_prompt.return_value = None
+        request = self.factory.post("/ask/", {"question": "What is the deductible?"})
+        request.user = mock.Mock(username="alice", is_authenticated=True)
+
+        with self.assertLogs("queries.views", level="INFO") as cm:
+            self.view(request)
+
+        receipt_lines = [line for line in cm.output if "Query received:" in line]
+        self.assertEqual(len(receipt_lines), 1)
+        self.assertIn("What is the deductible?", receipt_lines[0])
+        self.assertIn("user=alice", receipt_lines[0])
+        self.assertIn("top_k=5", receipt_lines[0])
+
+    @mock.patch("queries.views.generate_response")
+    @mock.patch("queries.views.build_prompt")
+    @mock.patch("queries.views.retrieve_chunks")
+    def test_post_logs_no_relevant_info_path(self, mock_retrieve, mock_build_prompt, mock_generate):
+        """No-chunks path emits the "Returned 'no relevant information' response" line."""
+        mock_retrieve.return_value = []
+        mock_build_prompt.return_value = None
+        request = self.factory.post("/ask/", {"question": "What is the deductible?"})
+        request.user = mock.Mock(username="bob", is_authenticated=True)
+
+        with self.assertLogs("queries.views", level="INFO") as cm:
+            response = self.view(request)
+
+        self.assertEqual(response.status_code, 200)
+        # The view-level "Returned 'no relevant information' response in T s" line.
+        no_info_lines = [line for line in cm.output if "no relevant information" in line]
+        self.assertEqual(len(no_info_lines), 1)
+        # Generate was never called.
+        mock_generate.assert_not_called()
+
+    @mock.patch("queries.views.generate_response")
+    @mock.patch("queries.views.build_prompt")
+    @mock.patch("queries.views.retrieve_chunks")
+    def test_post_logs_streaming_response_with_prompt_size(self, mock_retrieve, mock_build_prompt, mock_generate):
+        """Streaming path emits a "Streamed answer" line with prompt size and citation count."""
+        chunks = [
+            {"text": "Coverage yes.", "page_number": 2, "document_name": "Policy.pdf", "similarity_score": 0.85},
+        ]
+        mock_retrieve.return_value = chunks
+        mock_build_prompt.return_value = "prompt text"
+        mock_generate.return_value = iter(["Yes"])
+        request = self.factory.post("/ask/", {"question": "Is it covered?"})
+        request.user = mock.Mock(username="alice", is_authenticated=True)
+
+        with self.assertLogs("queries.views", level="INFO") as cm:
+            response = self.view(request)
+
+        self.assertEqual(response.status_code, 200)
+        stream_lines = [line for line in cm.output if "Streamed answer" in line]
+        self.assertEqual(len(stream_lines), 1)
+        # prompt=11 chars (length of "prompt text"), 1 citation
+        self.assertIn("prompt=11 chars", stream_lines[0])
+        self.assertIn("citations=1", stream_lines[0])
+
+    @mock.patch("queries.views.generate_response")
+    @mock.patch("queries.views.build_prompt")
+    @mock.patch("queries.views.retrieve_chunks")
+    def test_post_truncates_long_questions_in_log(self, mock_retrieve, mock_build_prompt, mock_generate):
+        """Long questions are truncated at 80 chars in the view-level log line
+        (PII / log volume protection)."""
+        mock_retrieve.return_value = []
+        mock_build_prompt.return_value = None
+        long_question = "x" * 200
+        request = self.factory.post("/ask/", {"question": long_question})
+        request.user = mock.Mock(username="alice", is_authenticated=True)
+
+        with self.assertLogs("queries.views", level="INFO") as cm:
+            self.view(request)
+
+        receipt_lines = [line for line in cm.output if "Query received:" in line]
+        self.assertEqual(len(receipt_lines), 1)
+        # The "..." truncation marker is present.
+        self.assertIn("...", receipt_lines[0])
+        # The full 200-char question is NOT present.
+        self.assertNotIn("x" * 200, receipt_lines[0])
+
+
+class QueryAPIViewLoggingTests(SimpleTestCase):
+    """Tests for the `queries.views` logger on QueryAPIView."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = QueryAPIView.as_view()
+        self.user = mock.Mock()
+        self.user.is_authenticated = True
+        self.user.pk = 1
+        self.user.id = 1
+        self.user.username = "alice"
+
+    @mock.patch("queries.views.generate_response")
+    @mock.patch("queries.views.build_prompt")
+    @mock.patch("queries.views.retrieve_chunks")
+    def test_query_logs_received_line_with_truncated_question(self, mock_retrieve, mock_build_prompt, mock_generate):
+        """`Query received: "..."` line includes the truncated question and username."""
+        mock_retrieve.return_value = []
+        mock_build_prompt.return_value = None
+        request = self.factory.post("/api/queries/", {"question": "What is the deductible?"})
+        force_authenticate(request, user=self.user)
+
+        with self.assertLogs("queries.views", level="INFO") as cm:
+            self.view(request)
+
+        receipt_lines = [line for line in cm.output if "Query received:" in line]
+        self.assertEqual(len(receipt_lines), 1)
+        self.assertIn("What is the deductible?", receipt_lines[0])
+        self.assertIn("user=alice", receipt_lines[0])
+
+    @mock.patch("queries.views.generate_response")
+    @mock.patch("queries.views.build_prompt")
+    @mock.patch("queries.views.retrieve_chunks")
+    def test_query_logs_no_relevant_info_path(self, mock_retrieve, mock_build_prompt, mock_generate):
+        """No-chunks path emits the "Returned 'no relevant information' response" line."""
+        mock_retrieve.return_value = []
+        mock_build_prompt.return_value = None
+        request = self.factory.post("/api/queries/", {"question": "What is the deductible?"})
+        force_authenticate(request, user=self.user)
+
+        with self.assertLogs("queries.views", level="INFO") as cm:
+            response = self.view(request)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        no_info_lines = [line for line in cm.output if "no relevant information" in line]
+        self.assertEqual(len(no_info_lines), 1)
+        mock_generate.assert_not_called()
+
+    @mock.patch("queries.views.generate_response")
+    @mock.patch("queries.views.build_prompt")
+    @mock.patch("queries.views.retrieve_chunks")
+    def test_query_logs_streaming_response_with_prompt_size(self, mock_retrieve, mock_build_prompt, mock_generate):
+        """Streaming path emits a "Streamed answer" line with prompt size and citation count."""
+        chunks = [
+            {"text": "Coverage yes.", "page_number": 2, "document_name": "Policy.pdf", "similarity_score": 0.85},
+        ]
+        mock_retrieve.return_value = chunks
+        mock_build_prompt.return_value = "prompt text"
+        mock_generate.return_value = iter(["Yes"])
+        request = self.factory.post("/api/queries/", {"question": "Is it covered?"})
+        force_authenticate(request, user=self.user)
+
+        with self.assertLogs("queries.views", level="INFO") as cm:
+            response = self.view(request)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        stream_lines = [line for line in cm.output if "Streamed answer" in line]
+        self.assertEqual(len(stream_lines), 1)
+        self.assertIn("prompt=11 chars", stream_lines[0])
+        self.assertIn("citations=1", stream_lines[0])

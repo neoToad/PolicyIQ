@@ -391,6 +391,23 @@
 - **Improvement beyond spec**: The completion line uses `0.00` for `first-token` when the stream is empty (t_first_token stayed None) instead of failing or printing "None" — operator sees "Generated 0 tokens in 0.00s (first-token=0.00s, backend=ollama)" which is the truthful summary
 - **Improvement beyond spec**: Added an empty-stream test (`test_generator_logs_only_completion_for_empty_stream`) that locks the no-first-token behavior so future refactors can't accidentally emit a "First token in 0.00s" line for a zero-token response
 
+## [Phase7.4] Add `queries.views` logger for ask-path request context
+- Added module-level `queries.views` logger to `policyiq/queries/views.py`
+- Emits 3 new info lines per ask (`AskPageView.post` and `QueryAPIView.post`):
+  - `Query received: "What is the deductible?" (user=alice, top_k=5)` — entry, question truncated to 80 chars
+  - `Returned 'no relevant information' response in T.TTs` — empty-library / no-relevant-chunks path
+  - `Streamed answer (prompt=11 chars, citations=1) in T.TTs` — success path with prompt size and citation count
+- Extracted `TOP_K = 5` module constant — used both in the view calls and the log line so they stay in sync
+- Reused `MAX_QUESTION_LOG_CHARS` from `queries.services.retriever` for question truncation (single source of truth)
+- Added `AskPageViewLoggingTests` (4 tests) and `QueryAPIViewLoggingTests` (3 tests) to `policyiq/queries/tests/test_views.py`:
+  - receipt line with username + truncated question + top_k
+  - no-relevant-info path
+  - streaming path with prompt size + citation count
+  - long-question truncation (PII guard)
+- All 130 tests pass (123 + 7 new)
+- **Improvement beyond spec**: Defensive `getattr(getattr(request, "user", None), "username", "anonymous")` instead of `getattr(request.user, ...)` — handles the case where the request is a raw `WSGIRequest` (Django's `RequestFactory`) without authentication middleware, which the existing `AskPageViewTests` rely on. Without this guard the 4 existing test cases regress to `AttributeError: 'WSGIRequest' object has no attribute 'user'`.
+- **Improvement beyond spec**: PII guard test `test_post_truncates_long_questions_in_log` — asserts the full 200-char `xxxxxx...` question does NOT appear in the log line, locking the truncation in place
+
 ---
 
 ## Build summary

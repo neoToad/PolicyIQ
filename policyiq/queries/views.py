@@ -1,4 +1,6 @@
 import json
+import logging
+import time
 
 from django.http import HttpRequest, HttpResponse, StreamingHttpResponse
 from django.shortcuts import render
@@ -15,8 +17,13 @@ from queries.serializers import CitationSerializer, QueryRequestSerializer
 from queries.services import health
 from queries.services.citations import build_citations
 from queries.services.generator import build_prompt, generate_response
+from queries.services.retriever import MAX_QUESTION_LOG_CHARS
 from queries.services.retriever import retrieve_chunks
 from queries.throttles import QueryAnonRateThrottle, QueryUserRateThrottle
+
+logger = logging.getLogger("queries.views")
+
+TOP_K = 5
 
 
 class AskPageView(View):
@@ -38,10 +45,21 @@ class AskPageView(View):
                 status=400,
             )
 
-        chunks = retrieve_chunks(question, document_id=document_id, top_k=5)
+        username = getattr(getattr(request, "user", None), "username", "anonymous")
+        safe_q = (
+            question[:MAX_QUESTION_LOG_CHARS] + "..."
+            if len(question) > MAX_QUESTION_LOG_CHARS
+            else question
+        )
+        t0 = time.monotonic()
+        logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, TOP_K)
+
+        chunks = retrieve_chunks(question, document_id=document_id, top_k=TOP_K)
         prompt = build_prompt(question, chunks, similarity_threshold=0.5)
 
         if prompt is None:
+            elapsed = time.monotonic() - t0
+            logger.info("Returned 'no relevant information' response in %.2fs", elapsed)
             return HttpResponse("<p>No relevant information found in the uploaded documents.</p>")
 
         citations = build_citations(chunks)
@@ -53,6 +71,12 @@ class AskPageView(View):
 
         response = StreamingHttpResponse(stream(), content_type="text/html")
         response["X-Citations"] = json.dumps(citations)
+        logger.info(
+            "Streamed answer (prompt=%d chars, citations=%d) in %.2fs",
+            len(prompt),
+            len(citations),
+            time.monotonic() - t0,
+        )
         return response
 
 
@@ -73,10 +97,21 @@ class QueryAPIView(APIView):
         if document_id is not None:
             document_id = str(document_id)
 
-        chunks = retrieve_chunks(question, document_id=document_id, top_k=5)
+        username = getattr(getattr(request, "user", None), "username", "anonymous")
+        safe_q = (
+            question[:MAX_QUESTION_LOG_CHARS] + "..."
+            if len(question) > MAX_QUESTION_LOG_CHARS
+            else question
+        )
+        t0 = time.monotonic()
+        logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, TOP_K)
+
+        chunks = retrieve_chunks(question, document_id=document_id, top_k=TOP_K)
         prompt = build_prompt(question, chunks, similarity_threshold=0.5)
 
         if prompt is None:
+            elapsed = time.monotonic() - t0
+            logger.info("Returned 'no relevant information' response in %.2fs", elapsed)
             return Response(
                 {"answer": "No relevant information found in the uploaded documents."},
                 status=status.HTTP_200_OK,
@@ -91,6 +126,12 @@ class QueryAPIView(APIView):
 
         response = StreamingHttpResponse(stream(), content_type="text/plain")
         response["X-Citations"] = json.dumps(citation_serializer.data)
+        logger.info(
+            "Streamed answer (prompt=%d chars, citations=%d) in %.2fs",
+            len(prompt),
+            len(citations),
+            time.monotonic() - t0,
+        )
         return response
 
 
