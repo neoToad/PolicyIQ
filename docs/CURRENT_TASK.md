@@ -1,32 +1,32 @@
 # Current Task
 
-**Build status: IN PROGRESS — Phase 7 (Logging improvements), Step 7.2**
+**Build status: IN PROGRESS — Phase 7 (Logging improvements), Step 7.3**
 
 ## Active step
-**Step 7.2 — Add `queries.retriever` info lines + `RetrieverLoggingTests`**
+**Step 7.3 — Add `queries.generator` info lines + `GeneratorLoggingTests`**
 
 ## What is happening now
-- TDD red phase: writing `policyiq/queries/tests/test_retriever.py` with
-  `RetrieverLoggingTests`. Three tests per the plan §2.8:
-  1. `test_retriever_logs_chunk_ids_and_scores` — most important; locks the
-     diagnostic "Chunks: [...]" format
-  2. `test_retriever_logs_embed_and_retrieve_durations` — both timing lines
-  3. `test_retriever_logs_zero_chunks` — empty-results path uses
-     "Retrieved 0 chunks", NOT the chunk-list line
-- The "Chunks: [...]" line is the highest-leverage change in the whole build —
-  it answers "did the LLM see the right chunks?"
-- No `test_retriever.py` file exists yet; safe to add
+- TDD red phase: writing `policyiq/queries/tests/test_generator.py` with
+  `GeneratorLoggingTests`. Tests per the plan §2.8:
+  1. `test_generator_logs_backend_and_prompt_size` — the
+     "Streaming from ollama (model=llama3.2, prompt=N chars)" line
+  2. `test_generator_logs_first_token_timing` — "First token in T.TTs"
+  3. `test_generator_logs_completion_with_token_count` — "Generated N tokens in T.TTs"
+- The existing `generate_response` function in `queries/services/generator.py`
+  already has a `queries.generator` logger; we're extending it
+- The existing `test_services.py` has `GenerateResponseTests` —
+  the new tests go in a separate `test_generator.py` to follow AGENTS.md
+  convention (`test_<service>.py`)
 
 ## TDD rules in effect
 - Red → confirm red → green → refactor → commit
-- `queries/services/retriever.py` will be modified; the logger created at
-  module top is `queries.retriever` (child of `queries`)
-- All log lines go through `assertLogs("queries.retriever", level="INFO")`
+- All log lines go through `assertLogs("queries.generator", level="INFO")`
 
 ## Blockers / decisions
-- None yet. Note from the plan §2.11: cap chunk-list output at 10 entries
-  with "+N more" suffix when top_k > 10
+- None yet. Note from the plan §2.11: "First token" timing is measured
+  from start of `generate_response()`; if the iterator isn't consumed
+  (e.g., test only calls the function but doesn't iterate), the line
+  will never fire — the tests must consume the iterator to verify
 
 ## Next step
-**Step 7.3 — Generator logging + tests** (backend selection + first-token
-timing; less critical than retriever but still core to the ask path narrative)
+**Step 7.4 — queries.views logging + tests** (request context lives here)

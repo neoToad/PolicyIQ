@@ -376,6 +376,21 @@
 - **Improvement beyond spec**: PII guard in `test_retriever_logs_chunk_ids_and_scores` — explicitly asserts the chunk TEXT does NOT appear in the log line (defense against future refactors that might dump the full text)
 - **Improvement beyond spec**: PII guard in `test_retriever_logs_question_truncated_to_max_chars` — asserts the long question does NOT appear in full in the receipt line (defense against accidentally disabling the truncation)
 
+## [Phase7.3] Add generator logging with first-token timing
+- Extended the existing `queries.generator` logger in `policyiq/queries/services/generator.py` to emit 3 new info lines per `generate_response()` call:
+  - `Streaming from ollama (model=llama3.2, prompt=24 chars)` (backend selection + model + prompt size; fires before first token)
+  - `First token in 0.48s` (time-to-first-token; the latency signal that matters for streaming UX)
+  - `Generated 187 tokens in 2.95s (first-token=0.48s, backend=ollama)` (completion summary with token count + total time + first-token + backend)
+- New `policyiq/queries/tests/test_generator.py` with 4 `GeneratorLoggingTests`:
+  - backend + model + prompt size line
+  - first-token timing line
+  - completion line with token count, first-token, and backend
+  - empty-stream path: 0 tokens, no first-token line (t_first_token stays None → 0.00 in the completion summary)
+- Refactored `generate_response` to use an explicit `for token in gen: yield token` loop instead of `yield from` — required so the timing wrapper can measure the first-token gap and accumulate token count
+- All 123 tests pass (119 + 4 new)
+- **Improvement beyond spec**: The completion line uses `0.00` for `first-token` when the stream is empty (t_first_token stayed None) instead of failing or printing "None" — operator sees "Generated 0 tokens in 0.00s (first-token=0.00s, backend=ollama)" which is the truthful summary
+- **Improvement beyond spec**: Added an empty-stream test (`test_generator_logs_only_completion_for_empty_stream`) that locks the no-first-token behavior so future refactors can't accidentally emit a "First token in 0.00s" line for a zero-token response
+
 ---
 
 ## Build summary

@@ -81,6 +81,10 @@ def _generate_anthropic(prompt: str) -> Iterator[str]:
 def generate_response(prompt: str) -> Iterator[str]:
     """Stream LLM tokens for the given prompt using the configured backend.
 
+    Emits INFO log lines for: backend selection (with model + prompt size),
+    time-to-first-token (the latency signal that matters for streaming UX),
+    and total tokens + duration on completion.
+
     Yields:
         Individual text tokens from the LLM response stream.
 
@@ -89,12 +93,38 @@ def generate_response(prompt: str) -> Iterator[str]:
         GenerationError: If the chosen backend is unreachable or misconfigured.
     """
     backend = getattr(settings, "LLM_BACKEND", "ollama")
+    model_name = OLLAMA_GENERATE_MODEL if backend == "ollama" else ANTHROPIC_MODEL
+    logger.info(
+        "Streaming from %s (model=%s, prompt=%d chars)",
+        backend,
+        model_name,
+        len(prompt),
+    )
+
     if backend == "ollama":
-        yield from _generate_ollama(prompt)
+        gen = _generate_ollama(prompt)
     elif backend == "anthropic":
-        yield from _generate_anthropic(prompt)
+        gen = _generate_anthropic(prompt)
     else:
         raise ValueError(f"Unsupported LLM_BACKEND: {backend}")
+
+    t_start = time.monotonic()
+    t_first_token: float | None = None
+    token_count = 0
+    for token in gen:
+        if t_first_token is None:
+            t_first_token = time.monotonic() - t_start
+            logger.info("First token in %.2fs", t_first_token)
+        token_count += 1
+        yield token
+
+    logger.info(
+        "Generated %d tokens in %.2fs (first-token=%.2fs, backend=%s)",
+        token_count,
+        time.monotonic() - t_start,
+        t_first_token if t_first_token is not None else 0.0,
+        backend,
+    )
 
 
 def build_prompt(question: str, chunks: list[dict], similarity_threshold: float = 0.5) -> str | None:
