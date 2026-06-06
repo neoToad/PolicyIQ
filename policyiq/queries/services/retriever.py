@@ -1,12 +1,36 @@
+import logging
+import time
+
 from documents.services.embedder import embed_query
 from documents.services.indexer import get_collection
+
+logger = logging.getLogger("queries.retriever")
+
+# Don't dump full questions into INFO logs — they may contain PHI. Truncate
+# at this many characters with a "..." suffix in the "Retrieving up to N
+# chunks" receipt line.
+MAX_QUESTION_LOG_CHARS = 80
+
+# Cap the "Chunks: [...]" log line at this many entries to keep log volume
+# bounded when top_k is large. The summary line above still reports the
+# total count; the cap only affects the per-chunk detail list.
+MAX_CHUNKS_IN_LOG = 10
+
+
+def _truncate_for_log(text: str, max_chars: int = MAX_QUESTION_LOG_CHARS) -> str:
+    """Truncate a string with a '...' suffix when it exceeds ``max_chars``."""
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "..."
 
 
 def retrieve_chunks(query: str, document_id: str | None = None, top_k: int = 5) -> list[dict]:
     """Retrieve the most semantically similar chunks for a query.
 
     Embeds the query, queries ChromaDB, and converts squared L2 distances
-    into cosine similarity scores.
+    into cosine similarity scores. Emits INFO log lines on entry, embed,
+    retrieve, and exit so operators can answer "did the LLM see the right
+    chunks?" without re-running the request.
 
     Args:
         query: The user's question.
@@ -16,15 +40,28 @@ def retrieve_chunks(query: str, document_id: str | None = None, top_k: int = 5) 
     Returns:
         Chunks sorted by descending similarity score.
     """
-    query_embedding = embed_query(query)
-    collection = get_collection()
+    safe_q = _truncate_for_log(query)
+    logger.info(
+        "Retrieving up to %d chunks for question=%r document_id=%s",
+        top_k,
+        safe_q,
+        document_id or "<all>",
+    )
 
+    t0 = time.monotonic()
+    query_embedding = embed_query(query)
+    embed_s = time.monotonic() - t0
+    logger.info("Embedded query (%d chars) in %.2fs", len(query), embed_s)
+
+    t0 = time.monotonic()
+    collection = get_collection()
     where_filter = {"document_id": document_id} if document_id else None
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=top_k,
         where=where_filter,
     )
+    retrieve_s = time.monotonic() - t0
 
     chunks = []
     ids = results.get("ids", [[]])[0]
@@ -49,4 +86,30 @@ def retrieve_chunks(query: str, document_id: str | None = None, top_k: int = 5) 
         )
 
     chunks.sort(key=lambda c: c["similarity_score"], reverse=True)
+
+    if chunks:
+        scores = [c["similarity_score"] for c in chunks]
+        # The diagnostic "Chunks: [...]" line lists docname, page, and score
+        # for each chunk — the operator's answer to "did the LLM see the
+        # right chunks?". Capped at MAX_CHUNKS_IN_LOG to bound log volume.
+        listed = chunks[:MAX_CHUNKS_IN_LOG]
+        chunk_summary = ", ".join(
+            f"{c['document_name']} p.{c['page_number']} ({c['similarity_score']:.3f})"
+            for c in listed
+        )
+        if len(chunks) > MAX_CHUNKS_IN_LOG:
+            chunk_summary += f" +{len(chunks) - MAX_CHUNKS_IN_LOG} more"
+        logger.info("Chunks: [%s]", chunk_summary)
+        logger.info(
+            "Retrieved %d chunks from %d documents (top=%.3f, range %.3f-%.3f) in %.2fs",
+            len(chunks),
+            len({c["document_id"] for c in chunks}),
+            max(scores),
+            min(scores),
+            max(scores),
+            retrieve_s,
+        )
+    else:
+        logger.info("Retrieved 0 chunks in %.2fs", retrieve_s)
+
     return chunks

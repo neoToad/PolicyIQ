@@ -355,6 +355,27 @@
 - **Improvement beyond spec**: Added an explicit "no-op" assertion for the `logger_` kwarg in `test_stage_timer_uses_passed_in_logger` so future contributors don't accidentally make the helper log and double-emit lines
 - **Improvement beyond spec**: Used Google-style docstring matching the rest of the services directory (`queries/services/retriever.py`, `generator.py`, etc.)
 
+## [Phase7.2] Add retriever logging with chunk-list diagnostic line
+- Added module-level logger `queries.retriever` to `policyiq/queries/services/retriever.py`
+- Emits 4 new info lines per call (was 0):
+  - `Retrieving up to N chunks for question=... document_id=...` (entry; question truncated to 80 chars)
+  - `Embedded query (N chars) in T.TTs` (embed stage timing)
+  - `Retrieved N chunks from M documents (top=0.900, range 0.750-0.900) in T.TTs` (retrieve stage timing + score range)
+  - `Chunks: [Test Policy.pdf p.1 (0.900), Test Policy.pdf p.2 (0.750)]` (per-chunk detail — the highest-leverage change; answers "did the LLM see the right chunks?")
+- Empty-results path uses `Retrieved 0 chunks in T.TTs` instead of the chunk-list line (no chunks to list)
+- Added `MAX_QUESTION_LOG_CHARS = 80` and `MAX_CHUNKS_IN_LOG = 10` module constants — the latter caps the chunk-list line and adds a `+N more` suffix when top_k > 10
+- Extracted `_truncate_for_log()` helper for the question-truncation logic
+- New `policyiq/queries/tests/test_retriever.py` with 6 `RetrieverLoggingTests`:
+  - chunk-list format (doc name + page + score)
+  - embed + retrieve timing lines both present
+  - zero-chunks path
+  - long question is truncated with "..." suffix
+  - retrieve summary includes top + range
+  - chunk-list caps at MAX_CHUNKS_IN_LOG with "+N more" suffix
+- All 119 tests pass (113 + 6 new)
+- **Improvement beyond spec**: PII guard in `test_retriever_logs_chunk_ids_and_scores` — explicitly asserts the chunk TEXT does NOT appear in the log line (defense against future refactors that might dump the full text)
+- **Improvement beyond spec**: PII guard in `test_retriever_logs_question_truncated_to_max_chars` — asserts the long question does NOT appear in full in the receipt line (defense against accidentally disabling the truncation)
+
 ---
 
 ## Build summary

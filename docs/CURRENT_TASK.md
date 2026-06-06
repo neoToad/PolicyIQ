@@ -1,23 +1,32 @@
 # Current Task
 
-**Build status: IN PROGRESS — Phase 7 (Logging improvements), Step 7.1**
+**Build status: IN PROGRESS — Phase 7 (Logging improvements), Step 7.2**
 
 ## Active step
-**Step 7.1 — Add `policyiq/queries/services/timing.py` with `stage_timer` context manager + failing tests in `test_timing.py`**
+**Step 7.2 — Add `queries.retriever` info lines + `RetrieverLoggingTests`**
 
 ## What is happening now
-- Branch `feature/logging-improvements` created from `main` (no remote push yet; will push after first commit)
-- TDD red phase: writing `policyiq/queries/tests/test_timing.py` with `StageTimerTests` that imports `stage_timer` from `policyiq.queries.services.timing` — expected to fail with `ImportError: cannot import name 'stage_timer'`
-- Three tests per the plan §2.8: elapsed_s positive on success, elapsed_s recorded on exception, exception still propagates
-- No `queries/tests/test_timing.py` exists yet; safe to add
+- TDD red phase: writing `policyiq/queries/tests/test_retriever.py` with
+  `RetrieverLoggingTests`. Three tests per the plan §2.8:
+  1. `test_retriever_logs_chunk_ids_and_scores` — most important; locks the
+     diagnostic "Chunks: [...]" format
+  2. `test_retriever_logs_embed_and_retrieve_durations` — both timing lines
+  3. `test_retriever_logs_zero_chunks` — empty-results path uses
+     "Retrieved 0 chunks", NOT the chunk-list line
+- The "Chunks: [...]" line is the highest-leverage change in the whole build —
+  it answers "did the LLM see the right chunks?"
+- No `test_retriever.py` file exists yet; safe to add
 
 ## TDD rules in effect
 - Red → confirm red → green → refactor → commit
-- Each step is one commit; current step commit message format: `feat(logging): add stage_timer context manager helper` + matching CHANGELOG entry
-- Test files follow AGENTS.md convention: `policyiq/queries/tests/test_timing.py` (service-layer tests)
+- `queries/services/retriever.py` will be modified; the logger created at
+  module top is `queries.retriever` (child of `queries`)
+- All log lines go through `assertLogs("queries.retriever", level="INFO")`
 
 ## Blockers / decisions
-- None yet
+- None yet. Note from the plan §2.11: cap chunk-list output at 10 entries
+  with "+N more" suffix when top_k > 10
 
 ## Next step
-**Step 7.2 — Retriever logging + tests** (highest-leverage; the chunk-listing test locks the diagnostic contract)
+**Step 7.3 — Generator logging + tests** (backend selection + first-token
+timing; less critical than retriever but still core to the ask path narrative)
