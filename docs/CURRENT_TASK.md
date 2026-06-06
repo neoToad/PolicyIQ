@@ -1,35 +1,35 @@
 # Current Task
 
-**Build status: IN PROGRESS — Phase 7 (Logging improvements), Step 7.6**
+**Build status: IN PROGRESS — Phase 7 (Logging improvements), Step 7.7**
 
 ## Active step
-**Step 7.6 — Add `documents.extractor` / `documents.chunker` / `documents.indexer` loggers + info/error lines**
+**Step 7.7 — Add `documents.views` logger for upload-path request context**
 
 ## What is happening now
-- TDD red phase: writing 3 new tests in
-  `policyiq/documents/tests/test_services.py` (extending the existing
-  service-test file — one test per service, plus an error test for the
-  indexer):
-  1. `test_extractor_logs_pages_extracted_with_timing` — info line on success
-  2. `test_chunker_logs_chunks_created_with_stats` — info line on success
-  3. `test_indexer_logs_vectors_indexed_with_timing` — info line on success
-  4. `test_indexer_logs_error_with_exception_type_on_failure` — error line
-- Per the plan §2.10, embedder.py success path stays silent (the pipeline
-  already logs at the embed stage). Only the 3 above modules need new
-  module-level loggers.
+- TDD red phase: writing `DocumentUploadLoggingTests` in
+  `policyiq/documents/tests/test_views.py` (extending the existing file —
+  view tests belong there per AGENTS.md)
+- Tests per the plan §2.8:
+  1. `test_upload_logs_received_line` — "Received upload 'X' (Y MB) from user=Z"
+  2. `test_upload_logs_validated_and_written_lines` — both intermediate lines
+  3. `test_upload_logs_dispatched_line_on_success` — "Dispatched ingestion
+     for X (document_id=Y) in T s"
+  4. `test_upload_logs_error_with_exception_type_on_failure` — "Ingestion
+     failed for X after T s: ExceptionType: msg" ERROR line
+- The view layer is the only place that knows the request context
+  (user, file size, content-type, status)
 
 ## TDD rules in effect
 - Red → confirm red → green → refactor → commit
-- All log lines go through `assertLogs("documents.{extractor,chunker,indexer}", level="INFO")`
+- All log lines go through `assertLogs("documents.views", level="INFO")`
+  or `assertLogs("documents.views", level="ERROR")` for the failure case
+- The 4 existing `DocumentUploadAPITests` cases use mocked `ingest_document`
+  and need to be verified to still pass
 
 ## Blockers / decisions
-- Decision: Add a single `ChunkingError`-style error path test for the
-  indexer (the plan mentions both success and error lines for indexer).
-  The extractor's existing code re-raises built-in exceptions
-  (FileNotFoundError, ValueError) and doesn't have a custom
-  ExtractionError path — so we don't need a new "extractor error" test
-  beyond what the pipeline failure test already covers.
+- None yet. The view-layer logging wraps the existing `_save_upload_and_ingest`
+  helper, not the view methods directly — keeps the logging close to the
+  actual ingestion orchestration
 
 ## Next step
-**Step 7.7 — documents.views upload logging + tests** (the view-layer
-narrative: received → validated → wrote → dispatched → failure)
+**Step 7.8 — pre-commit + full test run** (final verification gate)

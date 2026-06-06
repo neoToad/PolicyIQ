@@ -473,6 +473,160 @@ class UploadThrottleTests(TestCase):
         self.assertIn(UploadUserRateThrottle, DocumentUploadAPIView.throttle_classes)
 
 
+class DocumentUploadLoggingTests(TestCase):
+    """Tests for the `documents.views` logger on the upload path."""
+
+    def setUp(self):
+        self.factory = APIRequestFactory()
+        self.view = DocumentUploadAPIView.as_view()
+        self.user = mock.Mock()
+        self.user.is_authenticated = True
+        self.user.is_staff = False
+        self.user.username = "alice"
+        self.user.pk = 1
+        self.user.id = 1
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.views.ingest_document")
+    @mock.patch("documents.views.default_storage")
+    def test_upload_logs_received_line(self, mock_storage, mock_ingest):
+        """The 'Received upload X (Y MB) from user=Z' line fires at view entry."""
+        mock_storage.save.return_value = "documents/_tmp_policy.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
+
+        def _ingest_side_effect(document, file_path=None):
+            document.page_count = 2
+            document.chunk_count = 2
+            return {}
+
+        mock_ingest.side_effect = _ingest_side_effect
+
+        upload = SimpleUploadedFile(
+            "policy.pdf",
+            b"%PDF-1.4 " + b"x" * (1024 * 1024),  # ~1 MB
+            content_type="application/pdf",
+        )
+        request = self.factory.post(
+            "/api/documents/upload/",
+            {"file": upload},
+            format="multipart",
+        )
+        force_authenticate(request, user=self.user)
+
+        with self.assertLogs("documents.views", level="INFO") as cm:
+            self.view(request)
+
+        received_lines = [line for line in cm.output if "Received upload" in line]
+        self.assertEqual(len(received_lines), 1)
+        self.assertIn("policy.pdf", received_lines[0])
+        self.assertIn("MB", received_lines[0])
+        self.assertIn("user=alice", received_lines[0])
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.views.ingest_document")
+    @mock.patch("documents.views.default_storage")
+    def test_upload_logs_validated_and_written_lines(self, mock_storage, mock_ingest):
+        """The 'Validated PDF magic bytes' and 'Wrote X to Y' lines both fire."""
+        mock_storage.save.return_value = "documents/_tmp_policy.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
+
+        def _ingest_side_effect(document, file_path=None):
+            document.page_count = 1
+            document.chunk_count = 1
+            return {}
+
+        mock_ingest.side_effect = _ingest_side_effect
+
+        upload = SimpleUploadedFile(
+            "policy.pdf",
+            b"%PDF-1.4 fake content",
+            content_type="application/pdf",
+        )
+        request = self.factory.post(
+            "/api/documents/upload/",
+            {"file": upload},
+            format="multipart",
+        )
+        force_authenticate(request, user=self.user)
+
+        with self.assertLogs("documents.views", level="INFO") as cm:
+            self.view(request)
+
+        validated_lines = [line for line in cm.output if "Validated PDF" in line]
+        written_lines = [line for line in cm.output if "Wrote" in line and "policy.pdf" in line]
+        self.assertEqual(len(validated_lines), 1)
+        self.assertEqual(len(written_lines), 1)
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.views.ingest_document")
+    @mock.patch("documents.views.default_storage")
+    def test_upload_logs_dispatched_line_on_success(self, mock_storage, mock_ingest):
+        """The 'Dispatched ingestion' line fires on success with a duration."""
+        mock_storage.save.return_value = "documents/_tmp_policy.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
+
+        def _ingest_side_effect(document, file_path=None):
+            document.page_count = 1
+            document.chunk_count = 1
+            return {}
+
+        mock_ingest.side_effect = _ingest_side_effect
+
+        upload = SimpleUploadedFile(
+            "policy.pdf",
+            b"%PDF-1.4 fake content",
+            content_type="application/pdf",
+        )
+        request = self.factory.post(
+            "/api/documents/upload/",
+            {"file": upload},
+            format="multipart",
+        )
+        force_authenticate(request, user=self.user)
+
+        with self.assertLogs("documents.views", level="INFO") as cm:
+            self.view(request)
+
+        dispatched_lines = [line for line in cm.output if "Dispatched ingestion" in line]
+        self.assertEqual(len(dispatched_lines), 1)
+        self.assertIn("policy.pdf", dispatched_lines[0])
+        self.assertIn("document_id=", dispatched_lines[0])
+        # Duration "in T.TTs" suffix.
+        self.assertIn("in ", dispatched_lines[0])
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.views.ingest_document")
+    @mock.patch("documents.views.default_storage")
+    def test_upload_logs_error_with_exception_type_on_failure(self, mock_storage, mock_ingest):
+        """When ingest_document raises, the view logs an ERROR line with the exception type."""
+        from documents.exceptions import ExtractionError
+
+        mock_storage.save.return_value = "documents/_tmp_broken.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_broken.pdf"
+        mock_ingest.side_effect = ExtractionError("PDF corrupt")
+
+        upload = SimpleUploadedFile(
+            "broken.pdf",
+            b"%PDF-broken",
+            content_type="application/pdf",
+        )
+        request = self.factory.post(
+            "/api/documents/upload/",
+            {"file": upload},
+            format="multipart",
+        )
+        force_authenticate(request, user=self.user)
+
+        with self.assertLogs("documents.views", level="ERROR") as cm:
+            self.view(request)
+
+        error_lines = [line for line in cm.output if "Ingestion failed" in line and "broken.pdf" in line]
+        self.assertEqual(len(error_lines), 1)
+        self.assertIn("ExtractionError", error_lines[0])
+        # The error line includes a duration.
+        self.assertIn("after ", error_lines[0])
+
+
 class HomePageViewTests(TestCase):
     """Tests for the public homepage (`GET /`)."""
 

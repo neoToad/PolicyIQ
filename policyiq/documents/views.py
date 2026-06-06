@@ -1,3 +1,5 @@
+import logging
+import time
 from pathlib import PurePath
 
 from django.contrib.admin.views.decorators import staff_member_required
@@ -21,6 +23,8 @@ from documents.services.pipeline import ingest_document
 from documents.services.stats import get_library_stats
 from documents.throttles import UploadAnonRateThrottle, UploadUserRateThrottle
 
+logger = logging.getLogger("documents.views")
+
 
 def _validate_pdf(upload: UploadedFile) -> str | None:
     """Validate that an uploaded file is a PDF.
@@ -41,15 +45,34 @@ def _validate_pdf(upload: UploadedFile) -> str | None:
     return None
 
 
-def _save_upload_and_ingest(upload: UploadedFile) -> Document:
+def _save_upload_and_ingest(upload: UploadedFile, username: str = "anonymous") -> Document:
     """Save the uploaded PDF via Django's storage and run the full ingestion pipeline.
 
     The file is saved to temporary storage first, a Document record is created,
     and the shared `ingest_document` pipeline is invoked. On pipeline failure
     the Document and temp file are both cleaned up to prevent orphaned records.
+
+    Emits INFO lines at: receive, validate, write, dispatch; and an ERROR
+    line on ingest failure (with the exception type and total duration).
     """
     # Strip directory components to prevent path traversal.
     safe_name = PurePath(upload.name).name
+    size_mb = (upload.size or 0) / (1024 * 1024)
+    logger.info(
+        "Received upload %r (%.2f MB) from user=%s",
+        safe_name,
+        size_mb,
+        username,
+    )
+
+    validation_error = _validate_pdf(upload)
+    if validation_error:
+        # Validation should be caught by the caller before reaching this
+        # function, but if it slips through, log it for visibility.
+        logger.warning("Validation failed for %r: %s", safe_name, validation_error)
+
+    logger.info("Validated PDF magic bytes for %r", safe_name)
+
     temp_path = default_storage.save(f"documents/_tmp_{safe_name}", ContentFile(b""))
 
     try:
@@ -63,6 +86,7 @@ def _save_upload_and_ingest(upload: UploadedFile) -> Document:
         raise
 
     full_path = default_storage.path(temp_path)
+    logger.info("Wrote %r to %s", safe_name, temp_path)
 
     # Create the Document record before running the pipeline so the shared
     # service can update it directly. We delete it on failure.
@@ -73,13 +97,29 @@ def _save_upload_and_ingest(upload: UploadedFile) -> Document:
         chunk_count=0,
     )
 
+    t0 = time.monotonic()
     try:
         ingest_document(document, file_path=full_path)
-    except Exception:
+    except Exception as exc:
+        elapsed = time.monotonic() - t0
+        logger.error(
+            "Ingestion failed for %r after %.2fs: %s: %s",
+            safe_name,
+            elapsed,
+            type(exc).__name__,
+            exc,
+        )
         document.delete()
         if default_storage.exists(temp_path):
             default_storage.delete(temp_path)
         raise
+    elapsed = time.monotonic() - t0
+    logger.info(
+        "Dispatched ingestion for %r (document_id=%s) in %.2fs",
+        safe_name,
+        document.id,
+        elapsed,
+    )
 
     return document
 
@@ -126,7 +166,8 @@ class UploadPageView(View):
                 continue
 
             try:
-                document = _save_upload_and_ingest(upload)
+                username = getattr(getattr(request, "user", None), "username", "anonymous")
+                document = _save_upload_and_ingest(upload, username=username)
                 results.append({"success": True, "document": document})
             except Exception as exc:
                 results.append({"success": False, "name": upload.name, "error": str(exc)})
@@ -241,7 +282,8 @@ class DocumentUploadAPIView(APIView):
                 continue
 
             try:
-                document = _save_upload_and_ingest(upload)
+                username = getattr(getattr(request, "user", None), "username", "anonymous")
+                document = _save_upload_and_ingest(upload, username=username)
                 results.append(
                     {
                         "success": True,

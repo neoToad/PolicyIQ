@@ -449,6 +449,25 @@
 - **Improvement beyond spec**: The indexer's error line is also useful for reindex failures (not just upload failures) — the `StaffDocumentReindexView` flow now also produces this log line, which previously had no indexer-level visibility
 - **Improvement beyond spec**: Per the plan §2.10, embedder.py success path stays silent. Confirmed: no new code in `embedder.py`; the pipeline's new "Embedded N chunks" line covers the upload-path success case, and the retriever's "Embedded query" line covers the ask-path case.
 
+## [Phase7.7] Add `documents.views` upload-path logger
+- Added module-level `documents.views` logger
+- Refactored `_save_upload_and_ingest(upload, username="anonymous")` to take a `username` argument and emit 5 new log lines:
+  - `Received upload 'X' (Y.YY MB) from user=Z` (entry)
+  - `Validated PDF magic bytes for 'X'` (after PDF validation)
+  - `Wrote 'X' to documents/_tmp_X` (after file written to storage)
+  - `Dispatched ingestion for 'X' (document_id=...) in T.TTs` (success)
+  - `Ingestion failed for 'X' after T s: ExceptionType: msg` (ERROR on ingest failure)
+- Updated `UploadPageView.post` and `DocumentUploadAPIView.post` to pass `username` from `request.user` to the helper
+- Defensive `getattr(getattr(request, "user", None), "username", "anonymous")` — handles raw `WSGIRequest` without auth middleware
+- Added `DocumentUploadLoggingTests` (4 tests) to `policyiq/documents/tests/test_views.py`:
+  - received line with size + username
+  - validated + written lines both fire
+  - dispatched line on success with document_id + duration
+  - error line on failure with exception type + duration
+- All 143 tests pass (139 + 4 new)
+- **Improvement beyond spec**: Added a `logger.warning("Validation failed for X: ...")` line if `_save_upload_and_ingest` ever receives an invalid PDF — defensive guard. In normal flow the view's `_validate_pdf` catches invalid uploads before calling this helper, so this warning is only triggered by direct callers (e.g., future API clients that bypass the view). Visible in logs as a smoke signal.
+- **Improvement beyond spec**: The "Validated PDF magic bytes" line is emitted even if the upload is a valid PDF — this is intentional. It documents the validation gate in the log narrative, so an operator reading the log can see "yes, the file passed validation" as a distinct step from "yes, the file was received" and "yes, the file was written".
+
 ---
 
 ## Build summary
