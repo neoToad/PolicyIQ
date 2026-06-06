@@ -10,6 +10,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from documents.views import (
     DocumentUploadAPIView,
+    HomePageView,
     StaffDocumentDeleteView,
     StaffDocumentListView,
     StaffDocumentReindexView,
@@ -471,3 +472,61 @@ class UploadThrottleTests(TestCase):
 
         self.assertIn(UploadAnonRateThrottle, DocumentUploadAPIView.throttle_classes)
         self.assertIn(UploadUserRateThrottle, DocumentUploadAPIView.throttle_classes)
+
+
+class HomePageViewTests(TestCase):
+    """Tests for the public homepage (`GET /`)."""
+
+    @mock.patch("documents.views.get_library_stats")
+    def test_get_renders_home_template(self, mock_get_stats):
+        """GET / returns 200, uses home.html, and contains the hero H1 text."""
+        mock_get_stats.return_value = {
+            "documents": 0,
+            "chunks": 0,
+            "pages": 0,
+            "last_upload": None,
+        }
+
+        from django.test import Client
+
+        response = Client().get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.templates[0].name, "home.html")
+        # Hero tagline (per the spec).
+        self.assertContains(response, "Ask plain-language questions about payer policy PDFs.")
+
+    @mock.patch("documents.views.get_library_stats")
+    def test_get_calls_stats_service(self, mock_get_stats):
+        """The view must call get_library_stats() exactly once per request."""
+        mock_get_stats.return_value = {
+            "documents": 0,
+            "chunks": 0,
+            "pages": 0,
+            "last_upload": None,
+        }
+
+        from django.test import Client
+
+        Client().get("/")
+
+        mock_get_stats.assert_called_once_with()
+
+    @mock.patch("documents.views.get_library_stats")
+    def test_get_passes_stats_to_template(self, mock_get_stats):
+        """The view passes the stats dict to the template so numbers render."""
+        mock_get_stats.return_value = {
+            "documents": 3,
+            "chunks": 42,
+            "pages": 17,
+            "last_upload": None,
+        }
+
+        from django.test import Client
+
+        response = Client().get("/")
+
+        self.assertContains(response, "3")  # documents count
+        self.assertContains(response, "42")  # chunks count
+        self.assertContains(response, "17")  # pages count
+        self.assertIn("stats", response.context)
