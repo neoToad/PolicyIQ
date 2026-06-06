@@ -10,6 +10,7 @@ dependencies = [
     "Django==6.0.5",
     "django-cors-headers==4.9.0",
     "djangorestframework==3.17.1",
+    "pre-commit==4.6.0",
     "psycopg2-binary==2.9.12",
     "PyMuPDF==1.27.2.3",
     "python-dotenv==1.2.2",
@@ -20,6 +21,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ruff>=0.15.0",
+    "pytest==8.3.5",
+    "pytest-django==4.10.0",
 ]
 
 [tool.ruff]

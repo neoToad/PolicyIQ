@@ -3,6 +3,7 @@ chromadb==1.5.9
 Django==6.0.5
 django-cors-headers==4.9.0
 djangorestframework==3.17.1
+pre-commit==4.6.0
 psycopg2-binary==2.9.12
 PyMuPDF==1.27.2.3
 pytest==8.3.5

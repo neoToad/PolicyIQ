@@ -7,14 +7,14 @@
 
 
 ---
- 
+
 **Output a commit message:**
 ```
 <type>(<scope>): <summary>
 - <what changed>
 ```
 Types: `feat` `fix` `test` `refactor` `chore` `docs`
- 
+
 ---
 
 ## Rules

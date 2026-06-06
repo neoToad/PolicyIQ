@@ -1,0 +1,33 @@
+# Pre-commit hooks for PolicyIQ
+# Install: pre-commit install
+# Run on demand: pre-commit run --all-files
+# Skip hooks (e.g., for hotfix commits): git commit --no-verify
+#
+# Hooks run on every commit to enforce code quality, formatting, and basic
+# file hygiene. They are intentionally fast (<5s) so they don't slow down
+# development. The full test suite is run separately via CI / `make test`.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        # Markdown files often have intentional trailing whitespace (line breaks).
+        exclude: '\.md$'
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+      - id: no-commit-to-branch
+        args: ['--branch=main']
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.16
+    hooks:
+      - id: ruff
+        # Auto-fix lint issues (import sorting, simplifications, etc.).
+        args: ['--fix']
+      - id: ruff-format

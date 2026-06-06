@@ -182,6 +182,55 @@ policyiq/
 
 ---
 
+## Development
+
+### Running tests
+
+```bash
+# Django test runner (in-memory SQLite, no Postgres required)
+cd policyiq && python manage.py test
+
+# Pytest (Django tests + pytest-style tests)
+python -m pytest
+```
+
+### Linting and formatting
+
+Ruff handles both linting and formatting. The config lives in `pyproject.toml`.
+
+```bash
+# Auto-format
+python -m ruff format policyiq/
+
+# Lint (with auto-fix where possible)
+python -m ruff check --fix policyiq/
+```
+
+### Pre-commit hooks
+
+The repo includes `.pre-commit-config.yaml` with hooks for ruff (lint + format) and basic file hygiene (trailing whitespace, EOF newline, large files, merge conflict markers, line endings). Install once and they run automatically on every commit:
+
+```bash
+pip install pre-commit
+pre-commit install
+# Run on demand against the whole repo
+pre-commit run --all-files
+```
+
+The hooks are intentionally fast (<5s). The full test suite is run separately via `python manage.py test` or `pytest` — see CI / `make test`.
+
+### Make targets
+
+```bash
+make help            # list targets
+make lint            # ruff check
+make format          # ruff format
+make test            # Django tests
+make test-all        # Django + pytest
+```
+
+---
+
 ## License
 
 MIT
