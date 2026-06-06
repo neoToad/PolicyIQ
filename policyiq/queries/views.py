@@ -95,10 +95,13 @@ class QueryAPIView(APIView):
 
 
 class HealthCheckAPIView(APIView):
-    """Unauthenticated endpoint for dependency health checks."""
+    """Unauthenticated, unthrottled endpoint for dependency health checks."""
 
     authentication_classes = []
     permission_classes = []
+    # Explicit (rather than implicit) so monitors can poll freely without
+    # consuming any user/anon throttle budget.
+    throttle_classes: list = []
 
     def get(self, request: Request) -> Response:
         """Check PostgreSQL, ChromaDB, and Ollama connectivity."""

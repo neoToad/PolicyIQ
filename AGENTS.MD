@@ -20,6 +20,5 @@ Types: `feat` `fix` `test` `refactor` `chore` `docs`
 ## Rules
 - For new features, never write implementation before tests
 - Django: split tests into `test_models.py`, `test_views.py`, `test_serializers.py`
-- Frontend: Vitest + React Testing Library
 - No commit message if tests are failing
 - Never commit secrets, keys, or credentials — use .env

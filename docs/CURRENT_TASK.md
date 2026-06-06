@@ -1,39 +1,33 @@
 # Current Task
 
-**Step**: Phase 5.5 — Add rate limiting (in progress, interrupted)
-**Status**: Implementation partially complete, debugging a throttle test issue
+**Step**: Phase 5.5 — Add rate limiting (resuming from WIP state)
+**Status**: Diagnosing and fixing 4 failing tests; implementation is in place
 
-## What was done
-- Created `documents/throttles.py` with `UploadAnonRateThrottle` (scope `upload_anon`) and `UploadUserRateThrottle` (scope `upload_user`)
-- Created `queries/throttles.py` with `QueryAnonRateThrottle` (scope `query_anon`) and `QueryUserRateThrottle` (scope `query_user`)
-- Added `THROTTLE_QUERY_ANON`, `THROTTLE_QUERY_USER`, `THROTTLE_UPLOAD_ANON`, `THROTTLE_UPLOAD_USER` env-overridable settings in `settings.py` (defaults: 30/h, 120/h, 5/h, 30/h)
-- Added `DEFAULT_THROTTLE_RATES` to `REST_FRAMEWORK` config in `settings.py`
-- Applied `throttle_classes` to `DocumentUploadAPIView` (upload) and `QueryAPIView` (query)
-- Health check (`HealthCheckAPIView`) left without throttles so monitors can poll freely
-- Updated `.env` and `.env.example` with new throttle env vars
-- Added throttle tests in both `documents/tests/test_views.py` (`UploadThrottleTests`) and `queries/tests/test_views.py` (`QueryThrottleTests`)
+## Active work
+The rate limiting implementation is complete (throttles, settings, throttle_classes applied to views), but 4 tests fail. Working through them in order:
 
-## Blocked on
-The throttle tests are failing — DRF's `APISettings.DEFAULT_THROTTLE_RATES` is being reloaded by `override_settings`, but when a `SimpleRateThrottle` instance is created inside the override, `self.THROTTLE_RATES` still holds the stale value (likely because `THROTTLE_RATES` is a class attribute populated at class-definition time, not a dynamic lookup).
+### Failure 1: `test_health_check_is_not_throttled` — `[]` vs `()`
+`HealthCheckAPIView.throttle_classes` defaults to `[]` (mutable list), not `()`. Fix the assertion to `[]` — actually, set it explicitly to `[]` on the class for clarity.
 
-Need to investigate:
-- Why `THROTTLE_RATES` on the throttle class doesn't reflect `override_settings(REST_FRAMEWORK={...})`
-- Possible fix: ensure the test sets a low rate without relying on `override_settings` for the throttle rates (e.g., set the env var, or directly patch the throttle class's `THROTTLE_RATES` dict, or mock `allow_request`)
-- Test `test_health_check_is_not_throttled` failed because `APIView.throttle_classes` default is `[]`, not `()`. Need to update assertion to `[]`.
+### Failure 2: `test_authenticated_user_is_throttled_after_limit` (query) — third request gets 200 not 429
+DRF's `SimpleRateThrottle` caches `THROTTLE_RATES` at class-definition time. `override_settings(REST_FRAMEWORK=...)` only reloads `api_settings`, but the throttle class's `THROTTLE_RATES` is the populated dict from class definition, not a dynamic lookup. Need a different test strategy:
+- Either directly patch the throttle class's `THROTTLE_RATES` and `rate` attributes, or
+- Use `mock.patch.object` to patch `allow_request` to return True/False, or
+- Use the `cache.clear()` strategy combined with a low default rate env var.
 
-## Files modified (uncommitted)
-- `policyiq/policyiq/settings.py` (THROTTLE_* vars, REST_FRAMEWORK throttle rates)
-- `policyiq/policyiq/.env`, `policyiq/policyiq/.env.example` (new env vars)
-- `policyiq/documents/throttles.py` (new)
-- `policyiq/queries/throttles.py` (new)
-- `policyiq/documents/views.py` (throttle_classes on `DocumentUploadAPIView`)
-- `policyiq/queries/views.py` (throttle_classes on `QueryAPIView`)
-- `policyiq/documents/tests/test_views.py` (`UploadThrottleTests` class)
-- `policyiq/queries/tests/test_views.py` (`QueryThrottleTests` class + `override_settings` import)
+Cleanest fix: set the test to directly patch `THROTTLE_RATES` and `rate` on the throttle class. Tests with `override_settings` are unreliable here.
 
-## Next step on resume
-1. Fix the throttle rate refresh issue in tests — likely by directly patching `THROTTLE_RATES` on the class or by using a different test strategy
-2. Fix the `test_health_check_is_not_throttled` assertion (`[]` not `()`)
-3. Re-run all tests, confirm 89+ pass with the new throttle tests
-4. Update CHANGELOG and CURRENT_TASK, commit as `[Phase5.5]`
-5. Move to Phase 5.6 (pre-commit hooks) — the last remaining item
+### Failure 3: `test_authenticated_user_is_throttled_after_limit` (upload) — third request gets 201 not 429
+Same root cause as Failure 2.
+
+### Failure 4: `test_anonymous_requests_are_throttled_via_upload_anon_scope` — first request returns 500 not 401/403
+The throttle check runs before permission_classes, but the throttle fails to get a "throttle rate" lookup. Probably because the throttle's `THROTTLE_RATES` is stale (same issue as 2/3), or because the mock-storage layer fails. Likely the throttle consumes the slot but then DRF's allow_request on a stale rate says "go ahead", the storage write fails somewhere. Need to investigate.
+
+## Plan
+1. Fix the `[]` vs `()` assertion (1-line fix).
+2. Refactor the throttle tests to use `mock.patch.object` on the throttle class's `THROTTLE_RATES` and `rate` directly, OR a more robust strategy that exercises `allow_request` returning False.
+3. Verify all 95 tests pass.
+4. Commit Phase 5.5 and update CHANGELOG.
+
+## Next step after Phase 5.5
+Phase 5.6 — Add pre-commit hooks (`.pre-commit-config.yaml` with ruff).

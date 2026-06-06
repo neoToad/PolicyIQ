@@ -135,6 +135,10 @@ class QueryAPIViewTests(SimpleTestCase):
         self.view = QueryAPIView.as_view()
         self.user = mock.Mock()
         self.user.is_authenticated = True
+        # Set pk/id explicitly so the UserRateThrottle cache key uses the integer
+        # value (avoiding Django's CacheKeyWarning about Mock objects in keys).
+        self.user.pk = 1
+        self.user.id = 1
 
     @mock.patch("queries.views.generate_response")
     @mock.patch("queries.views.build_prompt")
@@ -296,7 +300,6 @@ class QueryThrottleTests(SimpleTestCase):
 
     def setUp(self):
         from django.core.cache import cache
-        from django.test import override_settings
 
         cache.clear()  # ensure no throttle state from previous tests
         self.factory = APIRequestFactory()
@@ -356,5 +359,6 @@ class QueryThrottleTests(SimpleTestCase):
 
     def test_health_check_is_not_throttled(self):
         """The health-check endpoint must remain unthrottled so monitors can poll it."""
-        # HealthCheckAPIView has no throttle_classes (and no DEFAULT_THROTTLE_CLASSES).
-        self.assertEqual(HealthCheckAPIView.throttle_classes, ())
+        # HealthCheckAPIView explicitly sets throttle_classes = [] so monitors
+        # can poll freely without consuming any user/anon throttle budget.
+        self.assertEqual(HealthCheckAPIView.throttle_classes, [])

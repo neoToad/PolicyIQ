@@ -236,3 +236,16 @@
 - All 89 tests pass (85 existing + 4 new); ruff clean
 - **Improvement beyond spec**: Empty-input short-circuit avoids an unnecessary empty POST to Ollama. Validates batch response shape (`len(embeddings) == len(texts)`) and raises a clear `ValueError` for malformed responses — a silent length mismatch could otherwise return wrong vectors paired with wrong chunks.
 - **Cleanup**: Also committed the previously-uncommitted `STATICFILES_DIRS` and `STATIC_ROOT` settings that were added during Phase 3.6 (CSS extraction) but never staged. These are needed for `collectstatic` to function correctly.
+
+## [Phase5.5] Add per-view rate limiting via DRF throttles
+- Created `documents/throttles.py` with `UploadAnonRateThrottle` (`upload_anon` scope) and `UploadUserRateThrottle` (`upload_user` scope)
+- Created `queries/throttles.py` with `QueryAnonRateThrottle` (`query_anon` scope) and `QueryUserRateThrottle` (`query_user` scope)
+- All throttles inherit from a shared `_DynamicRateMixin` that overrides `get_rate()` to look up rates from `api_settings.DEFAULT_THROTTLE_RATES` on every request — this is the key fix that makes `override_settings(REST_FRAMEWORK=...)` work for tests AND for live rate tuning
+- Added `THROTTLE_QUERY_ANON` (30/h), `THROTTLE_QUERY_USER` (120/h), `THROTTLE_UPLOAD_ANON` (5/h), `THROTTLE_UPLOAD_USER` (30/h) — all env-overridable via `THROTTLE_*` env vars
+- Added `DEFAULT_THROTTLE_RATES` to `REST_FRAMEWORK` config in `settings.py`
+- Applied `throttle_classes` to `DocumentUploadAPIView` (upload) and `QueryAPIView` (query)
+- `HealthCheckAPIView` explicitly sets `throttle_classes = []` so monitors can poll freely without consuming any throttle budget
+- Added `UploadThrottleTests` in `documents/tests/test_views.py` (3 tests: authenticated throttling, anonymous throttling, throttle_classes declared)
+- Added `QueryThrottleTests` in `queries/tests/test_views.py` (3 tests: authenticated throttling, throttle_classes declared, health check unthrottled)
+- All 95 tests pass; ruff clean
+- **Improvement beyond spec**: The `_DynamicRateMixin` was needed to fix a real correctness issue — DRF's `SimpleRateThrottle` captures rates into a class attribute at class-definition time, so `override_settings` does NOT update the rate. By overriding `get_rate()` to look up `api_settings.DEFAULT_THROTTLE_RATES` dynamically, the throttles respect live config changes (important for ops tuning and for tests that use `override_settings`). Set `pk=1, id=1` on the Mock users in tests to avoid Django's `CacheKeyWarning` about Mock reprs in throttle cache keys.
