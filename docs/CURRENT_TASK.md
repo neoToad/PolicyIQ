@@ -1,35 +1,36 @@
 # Current Task
 
-**Build status: IN PROGRESS — Phase 7 (Logging improvements), Step 7.4**
+**Build status: IN PROGRESS — Phase 7 (Logging improvements), Step 7.5**
 
 ## Active step
-**Step 7.4 — Add `queries.views` logger + `QueryLoggingTests`**
+**Step 7.5 — Add stage timing + failure logging to `documents.pipeline`**
 
 ## What is happening now
-- TDD red phase: writing tests in `policyiq/queries/tests/test_views.py`
-  (extending the existing file — view tests belong there per AGENTS.md)
-- The `QueryLoggingTests` class will cover:
-  1. `test_query_logs_received_line_with_truncated_question` — `Query
-     received: "..."` line, 80-char truncation, username included
-  2. `test_query_logs_no_relevant_info_path` — `Retrieved 0 chunks`,
-     `No relevant information`, view's "Returned ... response" line
-  3. `test_query_logs_streaming_response_with_prompt_size` — `Streamed
-     answer (prompt=N chars, M citations) in T.TTs` line on success
-- The view layer is the only place that has request context (user, etc.)
-- Need to be careful: tests use Mock users, so `getattr(user,
-  "username", "anonymous")` will return a Mock repr — but the logger
-  output goes to cm.output as the formatted string, so the assertion is
-  on substring presence
+- TDD red phase: creating new `policyiq/documents/tests/test_pipeline.py`
+  with `PipelineLoggingTests`. Tests per the plan §2.8:
+  1. `test_pipeline_logs_stage_lines_with_timing` — each stage's
+     logger emits its info line with a duration field
+  2. `test_pipeline_logs_failure_at_correct_stage` — chunker raises
+     `ChunkingError`; assert the error line identifies the stage + type
+  3. `test_pipeline_logs_completion_summary` — final "Ingestion
+     complete" line on success includes the duration
+- The existing `ingest_document` has 4 info lines; we need to add
+  `in T.TTs` suffixes (matching the pattern from other steps) and
+  wrap the whole thing in a try/except for failure logging
+- The pipeline's existing 4 logger.info lines already log; need to
+  augment with stage-level timing
 
 ## TDD rules in effect
 - Red → confirm red → green → refactor → commit
-- All log lines go through `assertLogs("queries.views", level="INFO")`
+- New test file is `test_pipeline.py` (per plan §2.3) — separate from
+  `test_services.py` to follow the `test_<service>.py` convention
 
 ## Blockers / decisions
-- None yet. Both `AskPageView.post` and `QueryAPIView.post` will get
-  logging — per the plan, the view layer is the natural place for
-  request-context lines
+- Decision: Use the existing `documents.pipeline` logger (no new module
+  logger) and add timing info to the existing 4 info lines
+- Need `ChunkingError` exception class — verify it exists in
+  `documents/exceptions.py` (was added in Phase 5.2 per CHANGELOG)
 
 ## Next step
-**Step 7.5 — pipeline.py stage timing + failure logging** (the existing 4
-info lines get `in T.TTs` suffixes + new failure path)
+**Step 7.6 — extractor/chunker/indexer logger creation + lines + tests**
+(one file at a time, per the plan)

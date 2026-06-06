@@ -408,6 +408,25 @@
 - **Improvement beyond spec**: Defensive `getattr(getattr(request, "user", None), "username", "anonymous")` instead of `getattr(request.user, ...)` — handles the case where the request is a raw `WSGIRequest` (Django's `RequestFactory`) without authentication middleware, which the existing `AskPageViewTests` rely on. Without this guard the 4 existing test cases regress to `AttributeError: 'WSGIRequest' object has no attribute 'user'`.
 - **Improvement beyond spec**: PII guard test `test_post_truncates_long_questions_in_log` — asserts the full 200-char `xxxxxx...` question does NOT appear in the log line, locking the truncation in place
 
+## [Phase7.5] Add pipeline stage timing + failure logging
+- Refactored `policyiq/documents/services/pipeline.py::ingest_document()` to wrap each stage with `time.monotonic()` and emit a per-stage info line with duration:
+  - `Extracted N pages from X in T.TTs` (was: no timing)
+  - `Created N chunks for X in T.TTs` (was: no timing)
+  - `Embedded N chunks for X in T.TTs` (NEW — was silent on the embed stage)
+  - `Indexed N chunks in collection for X in T.TTs` (NEW — was silent on the indexer stage from the pipeline side)
+  - `Ingestion complete for X (N pages, M chunks) in T.TTs` (was: no timing on the summary)
+- Wrapped the whole pipeline in `try/except` so failures land in a `Ingestion failed for X at stage=<extract|chunk|embed|index> after T.TTs: <ExceptionType>` info line — was previously completely silent on exception (the exception propagated to the view's `except` clause but the pipeline itself never recorded what failed)
+- Added `_STAGE_BY_EXCEPTION_NAME` mapping (ExtractionError→extract, ChunkingError→chunk, EmbeddingError→embed, IndexingError→index) with an `unknown` fallback for non-DocumentError exceptions
+- New `policyiq/documents/tests/test_pipeline.py` with 5 `PipelineLoggingTests`:
+  - completion summary with timing
+  - failure at extract stage → `stage=extract` + `ExtractionError`
+  - failure at chunk stage → `stage=chunk` + `ChunkingError`
+  - failure at index stage → `stage=index` + `IndexingError`
+  - "Starting ingestion" entry line with document id + name
+- All 135 tests pass (130 + 5 new)
+- **Improvement beyond spec**: Added a NEW `Embedded N chunks for X in T.TTs` info line — the original 4 pipeline info lines did not include an embed-stage line (the embedder logged retries/failures, but the success path was silent at the pipeline layer). This closes the gap that made "was it the embedder or the indexer?" hard to answer from the log.
+- **Improvement beyond spec**: Added a NEW `Indexed N chunks in collection for X in T.TTs` info line for the same reason — the indexer previously had no logger of its own, so the pipeline was silent on the final write step.
+
 ---
 
 ## Build summary
