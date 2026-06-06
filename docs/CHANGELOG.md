@@ -262,3 +262,18 @@
 - `pre-commit run --all-files` is now green for all hooks
 - All 95 tests pass; ruff clean
 - **Improvement beyond spec**: The pre-commit-hooks suite enforces file hygiene rules that were inconsistently applied across the repo (some files had CRLF, others LF; some lacked trailing newlines). Running `pre-commit run --all-files` against the existing codebase surfaced and fixed all of these in one pass, so the repo is now uniformly clean. The `mixed-line-ending` hook is set to `--fix=lf` to prevent Windows contributors from accidentally re-introducing CRLF. The `no-commit-to-branch` hook blocks direct commits to `main` — feature branches must go through PRs. The spec suggested adding a test-running hook but kept it as "or at least lint" — chose lint+format only because the full test suite is too slow (5-7s) to run on every commit.
+
+## [Phase6.1] Add failing tests for homepage stats and view
+- New `documents/tests/test_stats.py` with 4 unit tests for `get_library_stats()` (mocked, no DB):
+  - `test_get_library_stats_empty_db_returns_zeros` — Sum() returns None on an empty table; service must coerce to 0
+  - `test_get_library_stats_passes_through_counts` — non-zero aggregate flows through unchanged
+  - `test_get_library_stats_returns_last_upload_dict` — most recent upload is a dict with `id`, `name`, `uploaded_at`
+  - `test_get_library_stats_last_upload_none_when_empty` — explicit empty-library `last_upload=None` assertion
+- New `HomePageViewTests` class in `documents/tests/test_views.py` with 3 view tests:
+  - `test_get_renders_home_template` — `GET /` returns 200, renders `home.html`, contains hero H1
+  - `test_get_calls_stats_service` — view calls `get_library_stats()` exactly once per request
+  - `test_get_passes_stats_to_template` — stats dict reaches the template context; numbers render in HTML
+- Tests fail with `ImportError` (no `documents.services.stats` module, no `HomePageView` in `documents.views`) — the *correct* red-phase behavior per AGENTS.md
+- Added `docs/homepage-plan.md` and `docs/prompts/homepage_prompt.md` to the repo so the spec travels with the build
+- Staged the previously-uncommitted deletion of `docs/refactoring-plan.md` (file no longer exists on disk — finished at end of Phase 5)
+- **Deviation from spec**: The plan's §2.7 lists 6 view tests; the prompt explicitly mandates 3 (with target 102 total). Wrote the 3 the prompt calls out (the 3 most important) to match the 102-test acceptance criterion

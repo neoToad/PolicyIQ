@@ -1,13 +1,14 @@
 """Unit tests for documents.services.stats."""
 
 from datetime import UTC, datetime
+from unittest import TestCase
 from unittest import mock
 from uuid import uuid4
 
 from documents.services.stats import get_library_stats
 
 
-class GetLibraryStatsTests(mock.TestCase):
+class GetLibraryStatsTests(TestCase):
     """Unit tests for `get_library_stats()` — fully mocked, no DB."""
 
     def test_get_library_stats_empty_db_returns_zeros(self):
