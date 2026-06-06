@@ -18,6 +18,7 @@ from documents.models import Chunk, Document
 from documents.serializers import UploadResultSerializer
 from documents.services.indexer import delete_document
 from documents.services.pipeline import ingest_document
+from documents.services.stats import get_library_stats
 from documents.throttles import UploadAnonRateThrottle, UploadUserRateThrottle
 
 
@@ -81,6 +82,20 @@ def _save_upload_and_ingest(upload: UploadedFile) -> Document:
         raise
 
     return document
+
+
+class HomePageView(View):
+    """Public landing page: explains what PolicyIQ is and shows library stats."""
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the homepage with hero, how-it-works, and library stats.
+
+        Anonymous-accessible per the homepage plan §1.1 ("Visitors (public)"
+        audience) — the brand link in the nav (base.html:21) and any incoming
+        first-time visitor must be able to land on `/`.
+        """
+        stats = get_library_stats()
+        return render(request, "home.html", {"stats": stats})
 
 
 class UploadPageView(View):
