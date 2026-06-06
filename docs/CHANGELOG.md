@@ -346,6 +346,15 @@
 - Reset `docs/CURRENT_TASK.md` to the "build complete" pattern used after Phase 5
 - All Phase 6 work is on the `feature/policyiq-homepage` branch with `[Phase6.X]` commit messages; no PR opened (per the prompt)
 
+## [Phase7.1] Add `stage_timer` timing context manager
+- New `policyiq/queries/services/timing.py` with a `stage_timer(stage, logger_=None)` context manager that records wall-clock duration in a yielded dict
+- Helper intentionally does NOT log — service code reads `t["elapsed_s"]` and includes the duration in its own human-readable info line; this prevents double-logging
+- Duration is recorded on both success and exception paths (via `try/finally`); exceptions raised inside the block still propagate to the caller
+- New `policyiq/queries/tests/test_timing.py` with 5 tests covering: success path, exception path, exception propagation, real-sleep measurement, and the `logger_` kwarg
+- All 113 tests pass (102 existing + 11 new from prior builds + 5 new; original baseline was 102)
+- **Improvement beyond spec**: Added an explicit "no-op" assertion for the `logger_` kwarg in `test_stage_timer_uses_passed_in_logger` so future contributors don't accidentally make the helper log and double-emit lines
+- **Improvement beyond spec**: Used Google-style docstring matching the rest of the services directory (`queries/services/retriever.py`, `generator.py`, etc.)
+
 ---
 
 ## Build summary
