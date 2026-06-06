@@ -10,7 +10,6 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from documents.views import (
     DocumentUploadAPIView,
-    HomePageView,
     StaffDocumentDeleteView,
     StaffDocumentListView,
     StaffDocumentReindexView,

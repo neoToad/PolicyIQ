@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% load humanize %}
+
+{% block title %}PolicyIQ – Ask questions of your payer policy PDFs{% endblock %}
+
+{% block content %}
+  <section class="hero">
+    <h1>Ask plain-language questions about payer policy PDFs.</h1>
+    <p class="text-secondary">
+      No more ctrl-F through a 50-page Aetna policy. Upload your payer's policy documents,
+      ask in plain language, and get a grounded answer with citations showing exactly
+      where in the document it came from.
+    </p>
+    <div class="hero-cta">
+      <a class="btn" href="{% url 'upload-page' %}">Upload a PDF</a>
+      <a class="btn btn-secondary" href="{% url 'ask-page' %}">Ask a question</a>
+    </div>
+  </section>
+
+  <section class="feature-grid mt-4">
+    <article class="feature-card card">
+      <h3>1. Upload</h3>
+      <p>Drop in your payer policy PDFs. We extract, clean, chunk, and index them locally.</p>
+      <a href="{% url 'upload-page' %}">Go to Upload &rarr;</a>
+    </article>
+    <article class="feature-card card">
+      <h3>2. Ask</h3>
+      <p>Type a question the way you'd ask a coworker. Optionally scope it to a single document.</p>
+      <a href="{% url 'ask-page' %}">Go to Ask &rarr;</a>
+    </article>
+    <article class="feature-card card">
+      <h3>3. Get a cited answer</h3>
+      <p>A grounded response with source document, page number, and the exact passage used.</p>
+    </article>
+  </section>
+
+  <section class="card mt-4">
+    <h3>The library so far</h3>
+    {% if stats.last_upload %}
+      <p class="text-secondary text-sm">
+        Last upload:
+        <a href="{% url 'history-page' %}">{{ stats.last_upload.name }}</a>,
+        {{ stats.last_upload.uploaded_at|timesince }} ago.
+      </p>
+    {% else %}
+      <p class="text-secondary text-sm">No documents uploaded yet &mdash; the library is empty.</p>
+    {% endif %}
+    <div class="stat-grid">
+      <div class="stat">
+        <span class="stat-num">{{ stats.documents|intcomma }}</span>
+        <span class="stat-label">documents</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">{{ stats.chunks|intcomma }}</span>
+        <span class="stat-label">chunks indexed</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">{{ stats.pages|intcomma }}</span>
+        <span class="stat-label">pages of policy</span>
+      </div>
+    </div>
+  </section>
+{% endblock %}

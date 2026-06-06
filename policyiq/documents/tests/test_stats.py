@@ -1,8 +1,7 @@
 """Unit tests for documents.services.stats."""
 
 from datetime import UTC, datetime
-from unittest import TestCase
-from unittest import mock
+from unittest import TestCase, mock
 from uuid import uuid4
 
 from documents.services.stats import get_library_stats

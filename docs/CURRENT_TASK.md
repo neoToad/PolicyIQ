@@ -3,13 +3,16 @@
 **Phase 6: Homepage build** — In progress, following `docs/homepage-plan.md` §2.8.
 
 ## Current step
-**§2.8 step 4 — wire homepage URL at `/`.** Adding `path("", HomePageView.as_view(), name="home")`
-to `policyiq/urls.py` so the `GET /` 404 turns into a 200 (or — more likely at this
-point — a `TemplateDoesNotExist: home.html` since the template still doesn't exist).
+**§2.8 step 5 — add `home.html` template.** Three sections: hero, how-it-works
+(3 cards), library stats card. Uses `{% url 'upload-page' %}` and
+`{% url 'ask-page' %}` for the CTAs, `{% url 'history-page' %}` for the
+last-upload doc name link, and `{{ stats.last_upload.uploaded_at|timesince }}`
+for the "3 hours ago" relative time.
 
 ## What's next
-§2.8 step 5: add `templates/home.html` (the missing template). Step 6: CSS.
-Step 7: pre-commit. Step 8: full suite green at 102. Step 9: tracking files.
+§2.8 step 6: CSS additions for `.hero`, `.hero-cta`, `.feature-grid`,
+`.feature-card`, `.stat-grid`, `.stat`. Then pre-commit, full suite, and
+final tracking-file updates.
 
 ## Branch
 `feature/policyiq-homepage` (created from `main`).
