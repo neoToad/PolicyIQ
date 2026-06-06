@@ -5,6 +5,7 @@ from django.urls import include, path
 from documents.views import (
     DocumentDeleteView,
     HistoryPageView,
+    HomePageView,
     StaffDocumentDeleteView,
     StaffDocumentListView,
     StaffDocumentReindexView,
@@ -13,6 +14,7 @@ from documents.views import (
 from queries.views import AskPageView, HealthCheckAPIView
 
 urlpatterns = [
+    path("", HomePageView.as_view(), name="home"),
     path("admin/documents/", StaffDocumentListView.as_view(), name="staff-documents"),
     path("admin/documents/<uuid:pk>/delete/", StaffDocumentDeleteView.as_view(), name="staff-document-delete"),
     path("admin/documents/<uuid:pk>/reindex/", StaffDocumentReindexView.as_view(), name="document-reindex"),
