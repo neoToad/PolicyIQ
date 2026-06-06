@@ -1,27 +1,21 @@
 # Current Task
 
-**Step**: Phase 5.6 — Add pre-commit hooks
-**Status**: Starting implementation
+**Build status: COMPLETE** — All 5 refactoring phases (33/33 items) done.
 
-## Plan
-- Add `.pre-commit-config.yaml` with hooks for:
-  - `ruff check --fix` (lint)
-  - `ruff format` (format)
-  - Trailing whitespace
-  - End-of-file fixer
-  - YAML check
-  - Large file check
-- Add `pre-commit` to requirements.txt dev deps
-- Create a simple `.pre-commit-hooks.yaml` (only needed if shipping as a hook package — not needed for consumer use)
-- Optionally add a `Makefile` target that runs pre-commit and tests
-- Add documentation in CHANGELOG
-- The spec says "Add a pre-commit hook that runs the test suite (or at least lint)" — will go with lint+format (test suite is too slow for pre-commit)
-- Verify `pre-commit` is installed and hooks run
+## What was finished
+- Phase 5.5 (rate limiting) — committed as `6f6f2da`
+- Phase 5.6 (pre-commit hooks) — committed as `72a309d`
+- `docs/refactoring-plan.md` status updated to "All 5 phases complete"
 
-## Next step on resume
-1. Write `.pre-commit-config.yaml`
-2. Update `requirements.txt` to add `pre-commit`
-3. Add a `make lint` Makefile target (or document commands)
-4. Run `pre-commit install` and `pre-commit run --all-files` to validate
-5. Update CHANGELOG and commit as `[Phase5.6]`
-6. After Phase 5.6: update the refactoring-plan.md status, mark ALL phases complete
+## Verification
+- 95 Django tests pass; 6 pytest tests pass (101 total)
+- `ruff check policyiq/` — clean
+- `ruff format --check policyiq/` — clean
+- `pre-commit run --all-files` — all hooks pass
+
+## Next step
+None — the refactoring plan is fully implemented. Future work (out of scope for this build):
+- Docker / CI infrastructure
+- Per-document chunk-size tuning
+- Hosted vector DB migration
+- Production auth (real users, sessions, audit logging)
