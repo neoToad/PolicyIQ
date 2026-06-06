@@ -16,7 +16,7 @@ def _mock_ollama_stream_response(tokens: list[str]) -> mock.Mock:
     """Build a mock requests.post() response that streams Ollama JSON lines."""
     lines = []
     for token in tokens:
-        lines.append(f'{{"response":"{token}"}}'.encode("utf-8"))
+        lines.append(f'{{"response":"{token}"}}'.encode())
     lines.append(b'{"response":"","done":true}')
 
     mock_response = mock.Mock()

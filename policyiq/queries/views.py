@@ -17,8 +17,7 @@ from queries.serializers import CitationSerializer, QueryRequestSerializer
 from queries.services import health
 from queries.services.citations import build_citations
 from queries.services.generator import build_prompt, generate_response
-from queries.services.retriever import MAX_QUESTION_LOG_CHARS
-from queries.services.retriever import retrieve_chunks
+from queries.services.retriever import MAX_QUESTION_LOG_CHARS, retrieve_chunks
 from queries.throttles import QueryAnonRateThrottle, QueryUserRateThrottle
 
 logger = logging.getLogger("queries.views")
@@ -46,11 +45,7 @@ class AskPageView(View):
             )
 
         username = getattr(getattr(request, "user", None), "username", "anonymous")
-        safe_q = (
-            question[:MAX_QUESTION_LOG_CHARS] + "..."
-            if len(question) > MAX_QUESTION_LOG_CHARS
-            else question
-        )
+        safe_q = question[:MAX_QUESTION_LOG_CHARS] + "..." if len(question) > MAX_QUESTION_LOG_CHARS else question
         t0 = time.monotonic()
         logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, TOP_K)
 
@@ -98,11 +93,7 @@ class QueryAPIView(APIView):
             document_id = str(document_id)
 
         username = getattr(getattr(request, "user", None), "username", "anonymous")
-        safe_q = (
-            question[:MAX_QUESTION_LOG_CHARS] + "..."
-            if len(question) > MAX_QUESTION_LOG_CHARS
-            else question
-        )
+        safe_q = question[:MAX_QUESTION_LOG_CHARS] + "..." if len(question) > MAX_QUESTION_LOG_CHARS else question
         t0 = time.monotonic()
         logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, TOP_K)
 

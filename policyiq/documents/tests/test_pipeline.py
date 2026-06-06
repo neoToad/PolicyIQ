@@ -58,9 +58,8 @@ class PipelineLoggingTests(SimpleTestCase):
         mock_extract.side_effect = ExtractionError("PDF corrupt")
         doc = _make_document_mock("broken.pdf")
 
-        with self.assertRaises(ExtractionError):
-            with self.assertLogs("documents.pipeline", level="INFO") as cm:
-                ingest_document(doc)
+        with self.assertRaises(ExtractionError), self.assertLogs("documents.pipeline", level="INFO") as cm:
+            ingest_document(doc)
 
         failure_lines = [line for line in cm.output if "Ingestion failed" in line and "stage=extract" in line]
         self.assertEqual(len(failure_lines), 1)
@@ -77,9 +76,8 @@ class PipelineLoggingTests(SimpleTestCase):
         mock_chunk.side_effect = ChunkingError("chunk failed")
         doc = _make_document_mock("broken.pdf")
 
-        with self.assertRaises(ChunkingError):
-            with self.assertLogs("documents.pipeline", level="INFO") as cm:
-                ingest_document(doc)
+        with self.assertRaises(ChunkingError), self.assertLogs("documents.pipeline", level="INFO") as cm:
+            ingest_document(doc)
 
         failure_lines = [line for line in cm.output if "Ingestion failed" in line and "stage=chunk" in line]
         self.assertEqual(len(failure_lines), 1)
@@ -102,9 +100,8 @@ class PipelineLoggingTests(SimpleTestCase):
         mock_index.side_effect = IndexingError("ChromaDB write failed")
         doc = _make_document_mock("broken.pdf")
 
-        with self.assertRaises(IndexingError):
-            with self.assertLogs("documents.pipeline", level="INFO") as cm:
-                ingest_document(doc)
+        with self.assertRaises(IndexingError), self.assertLogs("documents.pipeline", level="INFO") as cm:
+            ingest_document(doc)
 
         failure_lines = [line for line in cm.output if "Ingestion failed" in line and "stage=index" in line]
         self.assertEqual(len(failure_lines), 1)

@@ -352,9 +352,8 @@ class IndexerLoggingTests(SimpleTestCase):
             },
         ]
 
-        with self.assertLogs("documents.indexer", level="ERROR") as cm:
-            with self.assertRaises(RuntimeError):
-                index_document("doc-fail", chunks, document_name="Test Policy.pdf")
+        with self.assertLogs("documents.indexer", level="ERROR") as cm, self.assertRaises(RuntimeError):
+            index_document("doc-fail", chunks, document_name="Test Policy.pdf")
 
         error_lines = [line for line in cm.output if "Failed to index" in line and "doc-fail" in line]
         self.assertEqual(len(error_lines), 1)

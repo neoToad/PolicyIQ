@@ -468,6 +468,13 @@
 - **Improvement beyond spec**: Added a `logger.warning("Validation failed for X: ...")` line if `_save_upload_and_ingest` ever receives an invalid PDF — defensive guard. In normal flow the view's `_validate_pdf` catches invalid uploads before calling this helper, so this warning is only triggered by direct callers (e.g., future API clients that bypass the view). Visible in logs as a smoke signal.
 - **Improvement beyond spec**: The "Validated PDF magic bytes" line is emitted even if the upload is a valid PDF — this is intentional. It documents the validation gate in the log narrative, so an operator reading the log can see "yes, the file passed validation" as a distinct step from "yes, the file was received" and "yes, the file was written".
 
+## [Phase7.8] pre-commit run --all-files clean
+- Ran `pre-commit run --all-files`. The `ruff` hook collapsed some new code to one line (e.g., the long ternary `safe_q = question[:MAX_QUESTION_LOG_CHARS] + "..." if ...` instead of a 4-line conditional); the `ruff-format` hook reformatted two files; the `mixed-line-ending` hook auto-fixed CRLF→LF on a handful of pre-existing files (homepage + settings + templates)
+- All hooks pass: `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-toml`, `check-added-large-files`, `check-merge-conflict`, `mixed-line-ending`, `no-commit-to-branch`, `ruff`, `ruff format`
+- 143 tests still pass after the formatting normalizations
+- This is hygiene only — no behavioral or functional code changes
+- **Note**: Did not collapse steps 7.8 (pre-commit) and 7.9 (final wrap-up) into a single commit, even though both are non-code "verification" steps. The Phase 5.6 / Phase 6.7 pre-commit integrations used the same pattern: a separate commit for the hook auto-fixes keeps the diff reviewable.
+
 ---
 
 ## Build summary

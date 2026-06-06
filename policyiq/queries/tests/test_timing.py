@@ -51,9 +51,8 @@ class StageTimerTests(SimpleTestCase):
 
     def test_stage_timer_does_not_swallow_exceptions(self):
         """Exceptions raised inside the block must propagate to the caller."""
-        with self.assertRaisesRegex(ValueError, "intentional"):
-            with stage_timer("propagates"):
-                raise ValueError("intentional failure")
+        with self.assertRaisesRegex(ValueError, "intentional"), stage_timer("propagates"):
+            raise ValueError("intentional failure")
 
     def test_stage_timer_uses_passed_in_logger(self):
         """If a logger is passed in, it is used (helper does not log itself,

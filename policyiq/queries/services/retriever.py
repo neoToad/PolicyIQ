@@ -94,8 +94,7 @@ def retrieve_chunks(query: str, document_id: str | None = None, top_k: int = 5) 
         # right chunks?". Capped at MAX_CHUNKS_IN_LOG to bound log volume.
         listed = chunks[:MAX_CHUNKS_IN_LOG]
         chunk_summary = ", ".join(
-            f"{c['document_name']} p.{c['page_number']} ({c['similarity_score']:.3f})"
-            for c in listed
+            f"{c['document_name']} p.{c['page_number']} ({c['similarity_score']:.3f})" for c in listed
         )
         if len(chunks) > MAX_CHUNKS_IN_LOG:
             chunk_summary += f" +{len(chunks) - MAX_CHUNKS_IN_LOG} more"
