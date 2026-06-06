@@ -155,3 +155,56 @@ th {
 .text-secondary { color: var(--text-secondary); }
 .mt-4 { margin-top: 24px; }
 .mb-2 { margin-bottom: 12px; }
+
+/* Homepage — hero, feature grid, library stats. */
+
+.hero { padding: 32px 0; }
+.hero h1 { font-size: 2.25rem; max-width: 720px; }
+.hero p { max-width: 640px; font-size: 1.05rem; }
+.hero-cta { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--accent);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover { background: var(--bg); }
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .feature-grid { grid-template-columns: 1fr; }
+}
+.feature-card a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+.feature-card a:hover { text-decoration: underline; }
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 12px;
+}
+@media (max-width: 540px) {
+  .stat-grid { grid-template-columns: 1fr; }
+}
+.stat { display: flex; flex-direction: column; align-items: flex-start; }
+.stat-num {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+.stat-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
