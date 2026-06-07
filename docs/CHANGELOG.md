@@ -638,3 +638,11 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - `retrieve_chunks` now takes `top_k: int | None = None` (uses `settings.RETRIEVAL_TOP_K` when None)
 - New `RetrieverSettingsTests` (2 tests) prove the setting flows into `n_results` of the ChromaDB query and the signature default is None
 - All 188 tests pass; ruff clean
+
+### [Phase0.1g] Refactor views.py to use settings
+- Replaced module-level `TOP_K = 5` in `policyiq/queries/views.py` with a `_top_k()` helper that reads `settings.RETRIEVAL_TOP_K` at request time (so `override_settings` and live ops tuning are honored)
+- `AskPageView.post` and `QueryAPIView.post` now call `_top_k()` and pass the value into `retrieve_chunks` and the receipt log line
+- `build_prompt` is now called without an explicit `similarity_threshold=0.5` — it defaults to `settings.SIMILARITY_THRESHOLD`, which `generator.py` already honors from the Phase0.1d refactor
+- Updated `test_views.py` and `test_views_pytest.py` to assert against `settings.RETRIEVAL_TOP_K` and the new `build_prompt` call shape
+- **Improvement beyond spec**: Dropped the hardcoded `0.5` in both view call sites so a single env-var change (`SIMILARITY_THRESHOLD`) flows into the view layer without code changes; previously the view hardcoded 0.5 even though the generator had a default
+- All 188 tests pass; ruff clean

@@ -2,6 +2,7 @@ import json
 from unittest import mock
 from uuid import uuid4
 
+from django.conf import settings
 from django.test import RequestFactory, SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
@@ -58,8 +59,10 @@ class AskPageViewTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         content = b"".join(response.streaming_content).decode("utf-8")
         self.assertEqual(content, '<div class="card"><p style="white-space: pre-wrap;">Answer is yes.</p></div>')
-        mock_retrieve.assert_called_once_with("Is it covered?", document_id=None, top_k=5)
-        mock_build_prompt.assert_called_once_with("Is it covered?", chunks, similarity_threshold=0.5)
+        mock_retrieve.assert_called_once_with("Is it covered?", document_id=None, top_k=settings.RETRIEVAL_TOP_K)
+        # build_prompt defaults similarity_threshold to settings.SIMILARITY_THRESHOLD
+        # — the view no longer hardcodes it.
+        mock_build_prompt.assert_called_once_with("Is it covered?", chunks)
         mock_generate.assert_called_once_with("prompt text")
 
     @mock.patch("queries.views.generate_response")
@@ -96,7 +99,7 @@ class AskPageViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         mock_retrieve.assert_called_once_with(
-            "Is it covered?", document_id="11111111-1111-1111-1111-111111111111", top_k=5
+            "Is it covered?", document_id="11111111-1111-1111-1111-111111111111", top_k=settings.RETRIEVAL_TOP_K
         )
 
     @mock.patch("queries.views.generate_response")
@@ -158,8 +161,10 @@ class QueryAPIViewTests(SimpleTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         content = b"".join(response.streaming_content).decode("utf-8")
         self.assertEqual(content, "Answer is yes.")
-        mock_retrieve.assert_called_once_with("Is it covered?", document_id=None, top_k=5)
-        mock_build_prompt.assert_called_once_with("Is it covered?", chunks, similarity_threshold=0.5)
+        mock_retrieve.assert_called_once_with("Is it covered?", document_id=None, top_k=settings.RETRIEVAL_TOP_K)
+        # build_prompt defaults similarity_threshold to settings.SIMILARITY_THRESHOLD
+        # — the view no longer hardcodes it.
+        mock_build_prompt.assert_called_once_with("Is it covered?", chunks)
         mock_generate.assert_called_once_with("prompt text")
 
     @mock.patch("queries.views.generate_response")
@@ -197,7 +202,7 @@ class QueryAPIViewTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         mock_retrieve.assert_called_once_with(
-            "Is it covered?", document_id="11111111-1111-1111-1111-111111111111", top_k=5
+            "Is it covered?", document_id="11111111-1111-1111-1111-111111111111", top_k=settings.RETRIEVAL_TOP_K
         )
 
     @mock.patch("queries.views.generate_response")
@@ -388,7 +393,7 @@ class AskPageViewLoggingTests(SimpleTestCase):
         self.assertEqual(len(receipt_lines), 1)
         self.assertIn("What is the deductible?", receipt_lines[0])
         self.assertIn("user=alice", receipt_lines[0])
-        self.assertIn("top_k=5", receipt_lines[0])
+        self.assertIn(f"top_k={settings.RETRIEVAL_TOP_K}", receipt_lines[0])
 
     @mock.patch("queries.views.generate_response")
     @mock.patch("queries.views.build_prompt")

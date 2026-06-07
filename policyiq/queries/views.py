@@ -2,6 +2,7 @@ import json
 import logging
 import time
 
+from django.conf import settings
 from django.http import HttpRequest, HttpResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.views import View
@@ -22,7 +23,14 @@ from queries.throttles import QueryAnonRateThrottle, QueryUserRateThrottle
 
 logger = logging.getLogger("queries.views")
 
-TOP_K = 5
+
+def _top_k() -> int:
+    """Read RETRIEVAL_TOP_K from settings at request time.
+
+    Reads on each call (not at import) so ``override_settings`` works in
+    tests and live ops tuning is honored.
+    """
+    return settings.RETRIEVAL_TOP_K
 
 
 class AskPageView(View):
@@ -47,10 +55,12 @@ class AskPageView(View):
         username = getattr(getattr(request, "user", None), "username", "anonymous")
         safe_q = question[:MAX_QUESTION_LOG_CHARS] + "..." if len(question) > MAX_QUESTION_LOG_CHARS else question
         t0 = time.monotonic()
-        logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, TOP_K)
+        top_k = _top_k()
+        logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, top_k)
 
-        chunks = retrieve_chunks(question, document_id=document_id, top_k=TOP_K)
-        prompt = build_prompt(question, chunks, similarity_threshold=0.5)
+        chunks = retrieve_chunks(question, document_id=document_id, top_k=top_k)
+        # build_prompt defaults similarity_threshold to settings.SIMILARITY_THRESHOLD.
+        prompt = build_prompt(question, chunks)
 
         if prompt is None:
             elapsed = time.monotonic() - t0
@@ -95,10 +105,12 @@ class QueryAPIView(APIView):
         username = getattr(getattr(request, "user", None), "username", "anonymous")
         safe_q = question[:MAX_QUESTION_LOG_CHARS] + "..." if len(question) > MAX_QUESTION_LOG_CHARS else question
         t0 = time.monotonic()
-        logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, TOP_K)
+        top_k = _top_k()
+        logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, top_k)
 
-        chunks = retrieve_chunks(question, document_id=document_id, top_k=TOP_K)
-        prompt = build_prompt(question, chunks, similarity_threshold=0.5)
+        chunks = retrieve_chunks(question, document_id=document_id, top_k=top_k)
+        # build_prompt defaults similarity_threshold to settings.SIMILARITY_THRESHOLD.
+        prompt = build_prompt(question, chunks)
 
         if prompt is None:
             elapsed = time.monotonic() - t0
