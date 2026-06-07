@@ -93,6 +93,11 @@ STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
+# MEDIA_ROOT_ASSUMES_LOCAL_FS: This setting assumes FileSystemStorage. If the
+# project ever moves to django-storages (S3, GCS, etc.), the call sites that
+# call `default_storage.path()` and `document.file.path` (in pipeline.py and
+# views.py) will raise NotImplementedError and need to be switched to
+# `default_storage.url()` or a stream-based API. See docs/REFACTOR_AUDIT.md L10.
 MEDIA_ROOT = BASE_DIR / "media"
 CHROMA_PERSIST_DIR = BASE_DIR / "chroma"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -100,6 +105,32 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LLM_BACKEND = os.environ.get("LLM_BACKEND", "ollama")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+
+# ---- LLM / embedding model selection (Phase 0) ----
+# OLLAMA_EMBED_URL and OLLAMA_GENERATE_URL are derived from OLLAMA_BASE_URL
+# via policyiq.llm_config helpers; we don't read them directly here.
+OLLAMA_EMBED_MODEL = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+OLLAMA_GENERATE_MODEL = os.environ.get("OLLAMA_GENERATE_MODEL", "llama3.2")
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+ANTHROPIC_MAX_TOKENS = int(os.environ.get("ANTHROPIC_MAX_TOKENS", "1024"))
+
+# ---- Embedding retry / batching / timeouts (Phase 0) ----
+EMBEDDING_RETRY_ATTEMPTS = int(os.environ.get("EMBEDDING_RETRY_ATTEMPTS", "3"))
+EMBEDDING_RETRY_DELAY = float(os.environ.get("EMBEDDING_RETRY_DELAY", "1"))
+EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "32"))
+EMBEDDING_BATCH_TIMEOUT = float(os.environ.get("EMBEDDING_BATCH_TIMEOUT", "60"))
+EMBEDDING_QUERY_TIMEOUT = float(os.environ.get("EMBEDDING_QUERY_TIMEOUT", "30"))
+GENERATION_TIMEOUT = float(os.environ.get("GENERATION_TIMEOUT", "60"))
+
+# ---- Chunking / retrieval / similarity (Phase 0) ----
+CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "500"))
+CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", "50"))
+RETRIEVAL_TOP_K = int(os.environ.get("RETRIEVAL_TOP_K", "5"))
+SIMILARITY_THRESHOLD = float(os.environ.get("SIMILARITY_THRESHOLD", "0.5"))
+SIMILARITY_BAR_HIGH = float(os.environ.get("SIMILARITY_BAR_HIGH", "0.75"))
+
+# ---- Upload limits (Phase 0) ----
+PDF_MAX_BYTES = int(os.environ.get("PDF_MAX_BYTES", str(50 * 1024 * 1024)))
 
 # Throttle rates are env-overridable so ops can tune limits without code changes.
 # Format is "<count>/<period>" where period is `s`, `m`, `h`, or `d`.

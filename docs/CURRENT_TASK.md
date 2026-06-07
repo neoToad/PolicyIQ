@@ -3,12 +3,16 @@
 **Phase 0 in progress — Foundation: shared settings + shared Ollama client.**
 
 ## Status
-- Branch `feature/policyiq-refactor` created from `main` (clean)
+- Branch `feature/policyiq-refactor` checked out from `main` (clean working tree aside from `docs/prompts/refactor_prompt.md` modification)
 - Baseline: 143 tests pass on main
-- 4 user decisions locked in (Chunk.text drop, drop DocumentDeleteView, delete StageTimer, drop test_views_pytest.py)
+- 4 user decisions locked in:
+  1. **Phase 2.2**: Drop `DocumentDeleteView`, staff-only deletes (matches default)
+  2. **Phase 5.1**: **KEEP both** (PG `Chunk` model + ChromaDB text) — user override from default; document the rationale in `CLAUDE.md`
+  3. **Phase 5.2**: Delete `queries/services/timing.py` and `queries/tests/test_timing.py` (matches default)
+  4. **Phase 4.9**: **KEEP `test_views_pytest.py`, drop `test_views.py`** — user override from default; commit fully to pytest-style
 
 ## Currently working on
-Phase 0.1a — adding the new settings to `policyiq/policyiq/settings.py`:
+Phase 0.1a — adding new settings to `policyiq/policyiq/settings.py`:
 - OLLAMA_EMBED_URL, OLLAMA_GENERATE_URL (derived from OLLAMA_BASE_URL via llm_config)
 - OLLAMA_EMBED_MODEL, OLLAMA_GENERATE_MODEL
 - ANTHROPIC_MODEL, ANTHROPIC_MAX_TOKENS

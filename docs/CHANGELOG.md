@@ -585,3 +585,27 @@
 **Uncommitted files:** None — see `git status` output below.
 
 **Branch state:** `feature/logging-improvements` with 9 commits on top of `main` (commit `fb2effd`); no PR opened, per the prompt.
+
+---
+
+## Refactor pass — `feature/policyiq-refactor`
+
+Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 High, 13 Medium, 12 Low). Phases 0–6 follow the spec in [`docs/REFACTOR_IMPLEMENTATION_PLAN.md`](./REFACTOR_IMPLEMENTATION_PLAN.md).
+
+### User decisions (locked in at start)
+- **Phase 2.2**: Drop public `DocumentDeleteView` — staff-only deletes.
+- **Phase 5.1**: **Keep** PG `Chunk` model + ChromaDB text (override from default "drop Chunk.text") — relational `Chunk` rows remain for admin and future audit; rationale documented in `CLAUDE.md`.
+- **Phase 5.2**: Delete `queries/services/timing.py` + `queries/tests/test_timing.py` (matches default).
+- **Phase 4.9**: **Keep** `test_views_pytest.py`, drop `test_views.py` — commit fully to pytest-style (override from default).
+
+### [Phase0.1a] Add LLM / embedding / chunking / retrieval settings
+- 16 new env-overridable settings added to `policyiq/policyiq/settings.py`:
+  - Models: `OLLAMA_EMBED_MODEL` (`nomic-embed-text`), `OLLAMA_GENERATE_MODEL` (`llama3.2`), `ANTHROPIC_MODEL` (`claude-sonnet-4-20250514`), `ANTHROPIC_MAX_TOKENS` (`1024`)
+  - Embedding retry/batch: `EMBEDDING_RETRY_ATTEMPTS` (`3`), `EMBEDDING_RETRY_DELAY` (`1`), `EMBEDDING_BATCH_SIZE` (`32`), `EMBEDDING_BATCH_TIMEOUT` (`60`), `EMBEDDING_QUERY_TIMEOUT` (`30`), `GENERATION_TIMEOUT` (`60`)
+  - Chunking/retrieval: `CHUNK_SIZE` (`500`), `CHUNK_OVERLAP` (`50`), `RETRIEVAL_TOP_K` (`5`), `SIMILARITY_THRESHOLD` (`0.5`), `SIMILARITY_BAR_HIGH` (`0.75`)
+  - Upload: `PDF_MAX_BYTES` (`50 * 1024 * 1024`)
+- New `policyiq/policyiq/llm_config.py` with `get_ollama_embed_url()`, `get_ollama_generate_url()`, `get_ollama_tags_url()` — all derive from `settings.OLLAMA_BASE_URL` and strip trailing slashes
+- Added `MEDIA_ROOT_ASSUMES_LOCAL_FS` comment near `MEDIA_ROOT` (closes audit L10)
+- New `policyiq/tests/test_settings.py` with 20 tests (16 required-settings + 4 llm_config helper tests)
+- All 163 tests pass (143 baseline + 20 new); ruff clean
+- **Improvement beyond spec**: Added `get_ollama_tags_url()` helper alongside the embed/generate ones — the health check (Phase 0.2d) and the new client both need it; defining it once at Phase 0.1b avoids a follow-up edit later.
