@@ -703,3 +703,30 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - `python manage.py check` → 0 issues
 - Live smoke test: dev server boots; `/api/health/` returns 200 with `{"status":"healthy","dependencies":{"postgresql":{"status":"up"},"chromadb":{"status":"up"},"ollama":{"status":"up"}}}` (the new `ollama.ping()` path); `/`, `/ask/`, `/upload/`, `/history/` return 200; `/admin/` returns 302 → login
 - All five services (embedder, generator, health, ollama_client, retriever/chunker) now flow through the same Ollama HTTP client with one retry policy and one error-envelope contract
+
+### [Phase1.1] Pipeline atomic write order with indexer-first
+- `documents/services/pipeline.py::ingest_document` body now wrapped in `django.db.transaction.atomic()` so `document.save()`, `index_document`, and `Chunk.objects.bulk_create` are all-or-nothing on the PG side
+- **Write order swapped**: `index_document` (ChromaDB) now runs BEFORE `Chunk.objects.bulk_create` (PostgreSQL). The reverse order would have meant an indexer failure leaves orphan PG `Chunk` rows with no corresponding vectors. With the new order, a `bulk_create` failure can be compensated by calling `delete_document(document_id)` to delete the just-written vectors
+- New `AtomicityTests` class in `documents/tests/test_pipeline.py` (5 tests):
+  - `test_pipeline_rolls_back_chunks_on_indexer_failure` — indexer raises after bulk_create; assert zero Chunk rows + page_count rolled back to 0
+  - `test_pipeline_rolls_back_indexer_writes_on_bulk_create_failure` — bulk_create raises IntegrityError; assert zero Chunk rows + `delete_document` called once with the document id
+  - `test_pipeline_uses_atomic_block` — mock `documents.services.pipeline.transaction.atomic`; assert it is called exactly once and used as a context manager
+  - `test_reindex_does_not_leave_orphan_chunks_on_failure` — seed a Chunk; run `StaffDocumentReindexView.post` with `index_document` mocked to raise; assert zero chunks remain (pre-delete cleared the seed, transaction rolled back any pipeline writes)
+  - `test_pipeline_orders_bulk_create_after_indexer` — indexer raises; assert `bulk_create.assert_not_called()` and zero Chunk rows
+- Legacy `PipelineLoggingTests` migrated from `SimpleTestCase` → `TestCase` so the new atomic block can run against the in-memory SQLite test DB
+- Removed unused `_make_document_mock` helper (the only callers were the legacy logging tests, which now build real documents via `_make_document_for_db`)
+- All 215 tests pass; ruff clean
+
+### [Phase1.2] Vector-orphan warning marker (audit H2 partial)
+- When `bulk_create` fails AND the compensating `delete_document` also fails, the pipeline emits a `WARNING` line containing `Vector orphan`, the `document_id`, and the `chunk_count`. The stable prefix means an ops sweeper job can `grep` for orphan candidates and clean up the leftover vectors
+- Locked in by new test `test_vector_orphan_warning_fires_when_compensation_fails` in `AtomicityTests` — mocks `bulk_create` to raise `IntegrityError` and `delete_document` to raise `IndexingError`, then asserts the WARNING line contains both the document id and the chunk count
+- The full H2 fix (a periodic sweeper job) is deferred to a follow-up; the marker is the operator-visible signal that a sweeper needs to act
+- All 215 tests pass; ruff clean
+- **Improvement beyond spec**: The compensation-failure path was already wired in Phase 1.1; this commit's contribution is the test that locks in the message format so a future refactor can't accidentally make it un-greppable. The message intentionally matches the audit's "vector orphan" wording verbatim so anyone reading the audit doc can find the corresponding log line.
+
+### [Phase1.3] pre-commit run --all-files clean
+- Ran `pre-commit run --all-files` against the new pipeline + test code. The `mixed-line-ending` hook auto-fixed CRLF→LF on a handful of pre-existing files (settings, several services, test_views, etc.); the `ruff` + `ruff format` hooks left the new code untouched
+- All hooks pass: `trailing-whitespace`, `end-of-file-fixer`, `check-yaml`, `check-toml`, `check-added-large-files`, `check-merge-conflict`, `mixed-line-ending`, `no-commit-to-branch`, `ruff`, `ruff format`
+- 215 tests still pass after the line-ending normalizations
+- Updated `docs/CURRENT_TASK.md` to mark Phase 1 complete and queue Phase 2 (delete-path safety, audit H2)
+- Hygiene only — no behavioral or functional code changes beyond the pre-existing Phase 1.1/1.2 commits
