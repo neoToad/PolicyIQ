@@ -1,15 +1,116 @@
 import logging
 import time
+from pathlib import PurePath
 
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 
-from documents.models import Chunk
+from documents.models import Chunk, Document
 from documents.services.chunker import chunk_pages
 from documents.services.embedder import embed_chunks
 from documents.services.extractor import clean_pages, extract_pages
 from documents.services.indexer import delete_document, index_document
 
 logger = logging.getLogger("documents.pipeline")
+
+
+def ingest_uploaded_pdf(upload: UploadedFile, *, username: str | None = None) -> Document:
+    """Take an uploaded file and run the full ingestion pipeline end-to-end.
+
+    **Audit M2 fix:** This is the canonical "user uploaded a PDF" entry
+    point. The view layer used to do five things in one block — validate,
+    save-to-temp, create-row, run-pipeline, cleanup-on-failure — tangled
+    with the lower-level ``ingest_document`` call. This service owns the
+    whole lifecycle so the view becomes a 5-line adapter and a future
+    bulk-import management command can reuse the same path.
+
+    The function:
+
+    1. Strips directory components from the upload name (path-traversal
+       protection) and logs the receipt.
+    2. Writes the upload bytes to ``default_storage`` under a temp
+       filename.
+    3. Creates a ``Document`` row pointing at the temp file.
+    4. Calls :func:`ingest_document` with the resolved filesystem path.
+    5. On success, deletes the temp file. On failure, deletes the
+       ``Document`` row and the temp file (no orphan rows or files).
+
+    Args:
+        upload: A Django ``UploadedFile`` (or any object with ``.name``,
+            ``.chunks()``). Required.
+        username: Optional username for the audit-trail log line.
+
+    Returns:
+        The newly-created :class:`documents.models.Document` row with
+        ``page_count`` and ``chunk_count`` populated.
+
+    Raises:
+        Any exception from :func:`ingest_document` (extraction,
+        chunking, embedding, indexing failures). The Document row and
+        the temp file are cleaned up before the exception propagates.
+    """
+    safe_name = PurePath(upload.name).name
+    size_mb = (upload.size or 0) / (1024 * 1024)
+    logger.info(
+        "Received upload %r (%.2f MB) from user=%s",
+        safe_name,
+        size_mb,
+        username or "anonymous",
+    )
+
+    temp_path = default_storage.save(f"documents/_tmp_{safe_name}", ContentFile(b""))
+
+    try:
+        with default_storage.open(temp_path, "wb") as f:
+            for chunk in upload.chunks():
+                f.write(chunk)
+    except Exception:
+        if default_storage.exists(temp_path):
+            default_storage.delete(temp_path)
+        raise
+
+    full_path = default_storage.path(temp_path)
+    logger.info("Wrote %r to %s", safe_name, temp_path)
+
+    document = Document.objects.create(
+        name=safe_name,
+        file=temp_path,
+        page_count=0,
+        chunk_count=0,
+    )
+
+    t0 = time.monotonic()
+    try:
+        ingest_document(document, file_path=full_path)
+    except Exception as exc:
+        elapsed = time.monotonic() - t0
+        logger.error(
+            "Ingestion failed for %r after %.2fs: %s: %s",
+            safe_name,
+            elapsed,
+            type(exc).__name__,
+            exc,
+        )
+        document.delete()
+        if default_storage.exists(temp_path):
+            default_storage.delete(temp_path)
+        raise
+    elapsed = time.monotonic() - t0
+    logger.info(
+        "Dispatched ingestion for %r (document_id=%s) in %.2fs",
+        safe_name,
+        document.id,
+        elapsed,
+    )
+
+    # Clean up the temp file — the pipeline wrote a real copy to disk
+    # for ingestion but the canonical file lives at ``document.file``.
+    if default_storage.exists(temp_path):
+        default_storage.delete(temp_path)
+
+    return document
 
 
 def ingest_document(document, file_path: str | None = None) -> dict:

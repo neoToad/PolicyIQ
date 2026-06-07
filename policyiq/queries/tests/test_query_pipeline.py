@@ -74,9 +74,7 @@ class RunQueryTests(SimpleTestCase):
     @mock.patch("queries.services.query_pipeline.generate_response")
     @mock.patch("queries.services.query_pipeline.build_prompt")
     @mock.patch("queries.services.query_pipeline.retrieve_chunks")
-    def test_run_query_streams_tokens_and_carries_citations(
-        self, mock_retrieve, mock_build_prompt, mock_generate
-    ):
+    def test_run_query_streams_tokens_and_carries_citations(self, mock_retrieve, mock_build_prompt, mock_generate):
         """Two chunks above threshold + a 3-token generator → QueryResult
         with ``kind == 'answer'``, an iterator yielding the 3 tokens, and
         citations populated from the chunks."""
@@ -113,9 +111,7 @@ class RunQueryTests(SimpleTestCase):
     @mock.patch("queries.services.query_pipeline.generate_response")
     @mock.patch("queries.services.query_pipeline.build_prompt")
     @mock.patch("queries.services.query_pipeline.retrieve_chunks")
-    def test_run_query_wraps_generate_response_with_safe_stream(
-        self, mock_retrieve, mock_build_prompt, mock_generate
-    ):
+    def test_run_query_wraps_generate_response_with_safe_stream(self, mock_retrieve, mock_build_prompt, mock_generate):
         """``run_query`` wraps ``generate_response`` with ``safe_stream`` so
         mid-stream :class:`GenerationError` becomes a sentinel marker
         instead of truncating the response (audit H6)."""
@@ -140,9 +136,7 @@ class RunQueryTests(SimpleTestCase):
     @mock.patch("queries.services.query_pipeline.generate_response")
     @mock.patch("queries.services.query_pipeline.build_prompt")
     @mock.patch("queries.services.query_pipeline.retrieve_chunks")
-    def test_run_query_uses_settings_for_top_k_when_unspecified(
-        self, mock_retrieve, mock_build_prompt, mock_generate
-    ):
+    def test_run_query_uses_settings_for_top_k_when_unspecified(self, mock_retrieve, mock_build_prompt, mock_generate):
         """When ``top_k`` is None, ``run_query`` reads from
         ``settings.RETRIEVAL_TOP_K``."""
         mock_retrieve.return_value = []
@@ -155,9 +149,7 @@ class RunQueryTests(SimpleTestCase):
     @mock.patch("queries.services.query_pipeline.generate_response")
     @mock.patch("queries.services.query_pipeline.build_prompt")
     @mock.patch("queries.services.query_pipeline.retrieve_chunks")
-    def test_run_query_passes_explicit_top_k_to_retriever(
-        self, mock_retrieve, mock_build_prompt, mock_generate
-    ):
+    def test_run_query_passes_explicit_top_k_to_retriever(self, mock_retrieve, mock_build_prompt, mock_generate):
         """An explicit ``top_k`` argument overrides the setting."""
         mock_retrieve.return_value = []
 
@@ -169,9 +161,7 @@ class RunQueryTests(SimpleTestCase):
     @mock.patch("queries.services.query_pipeline.generate_response")
     @mock.patch("queries.services.query_pipeline.build_prompt")
     @mock.patch("queries.services.query_pipeline.retrieve_chunks")
-    def test_run_query_passes_explicit_threshold_to_build_prompt(
-        self, mock_retrieve, mock_build_prompt, mock_generate
-    ):
+    def test_run_query_passes_explicit_threshold_to_build_prompt(self, mock_retrieve, mock_build_prompt, mock_generate):
         """The threshold argument is forwarded to ``build_prompt``."""
         mock_retrieve.return_value = self.chunks
         mock_build_prompt.return_value = "prompt text"

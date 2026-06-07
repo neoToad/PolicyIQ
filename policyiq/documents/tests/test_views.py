@@ -30,8 +30,8 @@ class DocumentUploadAPITests(TestCase):
         self.user.id = 1
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
-    @mock.patch("documents.views.ingest_document")
-    @mock.patch("documents.views.default_storage")
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_pdf_runs_pipeline_and_returns_expected_payload(self, mock_storage, mock_ingest):
         mock_storage.save.return_value = "documents/_tmp_policy.pdf"
         mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
@@ -65,8 +65,8 @@ class DocumentUploadAPITests(TestCase):
         mock_ingest.assert_called_once()
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
-    @mock.patch("documents.views.ingest_document")
-    @mock.patch("documents.views.default_storage")
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_returns_structured_error_on_pipeline_failure(self, mock_storage, mock_ingest):
         mock_storage.save.return_value = "documents/_tmp_broken.pdf"
         mock_storage.path.return_value = "/tmp/media/documents/_tmp_broken.pdf"
@@ -399,8 +399,8 @@ class UploadThrottleTests(TestCase):
             },
         }
     )
-    @mock.patch("documents.views.ingest_document")
-    @mock.patch("documents.views.default_storage")
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
     def test_authenticated_user_is_throttled_after_limit(self, mock_storage, mock_ingest):
         """Authenticated users exceeding upload_user rate get 429."""
         mock_storage.save.return_value = "documents/_tmp_policy.pdf"
@@ -440,8 +440,8 @@ class UploadThrottleTests(TestCase):
             },
         }
     )
-    @mock.patch("documents.views.ingest_document")
-    @mock.patch("documents.views.default_storage")
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
     def test_anonymous_requests_are_throttled_via_upload_anon_scope(self, mock_storage, mock_ingest):
         """Anonymous users (no auth) are throttled by the upload_anon scope."""
         from rest_framework.permissions import AllowAny
@@ -491,8 +491,8 @@ class DocumentUploadLoggingTests(TestCase):
         self.user.id = 1
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
-    @mock.patch("documents.views.ingest_document")
-    @mock.patch("documents.views.default_storage")
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_logs_received_line(self, mock_storage, mock_ingest):
         """The 'Received upload X (Y MB) from user=Z' line fires at view entry."""
         mock_storage.save.return_value = "documents/_tmp_policy.pdf"
@@ -517,7 +517,7 @@ class DocumentUploadLoggingTests(TestCase):
         )
         force_authenticate(request, user=self.user)
 
-        with self.assertLogs("documents.views", level="INFO") as cm:
+        with self.assertLogs("documents.pipeline", level="INFO") as cm:
             self.view(request)
 
         received_lines = [line for line in cm.output if "Received upload" in line]
@@ -527,10 +527,10 @@ class DocumentUploadLoggingTests(TestCase):
         self.assertIn("user=alice", received_lines[0])
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
-    @mock.patch("documents.views.ingest_document")
-    @mock.patch("documents.views.default_storage")
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_logs_validated_and_written_lines(self, mock_storage, mock_ingest):
-        """The 'Validated PDF magic bytes' and 'Wrote X to Y' lines both fire."""
+        """The 'Wrote X to Y' line fires from the pipeline service after the upload write."""
         mock_storage.save.return_value = "documents/_tmp_policy.pdf"
         mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
 
@@ -553,17 +553,15 @@ class DocumentUploadLoggingTests(TestCase):
         )
         force_authenticate(request, user=self.user)
 
-        with self.assertLogs("documents.views", level="INFO") as cm:
+        with self.assertLogs("documents.pipeline", level="INFO") as cm:
             self.view(request)
 
-        validated_lines = [line for line in cm.output if "Validated PDF" in line]
         written_lines = [line for line in cm.output if "Wrote" in line and "policy.pdf" in line]
-        self.assertEqual(len(validated_lines), 1)
         self.assertEqual(len(written_lines), 1)
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
-    @mock.patch("documents.views.ingest_document")
-    @mock.patch("documents.views.default_storage")
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_logs_dispatched_line_on_success(self, mock_storage, mock_ingest):
         """The 'Dispatched ingestion' line fires on success with a duration."""
         mock_storage.save.return_value = "documents/_tmp_policy.pdf"
@@ -588,7 +586,7 @@ class DocumentUploadLoggingTests(TestCase):
         )
         force_authenticate(request, user=self.user)
 
-        with self.assertLogs("documents.views", level="INFO") as cm:
+        with self.assertLogs("documents.pipeline", level="INFO") as cm:
             self.view(request)
 
         dispatched_lines = [line for line in cm.output if "Dispatched ingestion" in line]
@@ -599,10 +597,10 @@ class DocumentUploadLoggingTests(TestCase):
         self.assertIn("in ", dispatched_lines[0])
 
     @override_settings(MEDIA_ROOT=tempfile.gettempdir())
-    @mock.patch("documents.views.ingest_document")
-    @mock.patch("documents.views.default_storage")
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_logs_error_with_exception_type_on_failure(self, mock_storage, mock_ingest):
-        """When ingest_document raises, the view logs an ERROR line with the exception type."""
+        """When ingest_document raises, the pipeline logs an ERROR line with the exception type."""
         from documents.exceptions import ExtractionError
 
         mock_storage.save.return_value = "documents/_tmp_broken.pdf"
@@ -621,7 +619,7 @@ class DocumentUploadLoggingTests(TestCase):
         )
         force_authenticate(request, user=self.user)
 
-        with self.assertLogs("documents.views", level="ERROR") as cm:
+        with self.assertLogs("documents.pipeline", level="ERROR") as cm:
             self.view(request)
 
         error_lines = [line for line in cm.output if "Ingestion failed" in line and "broken.pdf" in line]

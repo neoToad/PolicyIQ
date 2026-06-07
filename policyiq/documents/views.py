@@ -1,10 +1,6 @@
 import logging
-import time
-from pathlib import PurePath
 
 from django.contrib.admin.views.decorators import staff_member_required
-from django.core.files.base import ContentFile
-from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import UploadedFile
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
@@ -20,7 +16,7 @@ from documents.models import Chunk, Document
 from documents.serializers import UploadResultSerializer
 from documents.services.deletion import delete_document_with_chunks
 from documents.services.indexer import delete_document
-from documents.services.pipeline import ingest_document
+from documents.services.pipeline import ingest_document, ingest_uploaded_pdf
 from documents.services.stats import get_library_stats
 from documents.throttles import UploadAnonRateThrottle, UploadUserRateThrottle
 
@@ -46,95 +42,11 @@ def _validate_pdf(upload: UploadedFile) -> str | None:
     return None
 
 
-def _save_upload_and_ingest(upload: UploadedFile, username: str = "anonymous") -> Document:
-    """Save the uploaded PDF via Django's storage and run the full ingestion pipeline.
-
-    The file is saved to temporary storage first, a Document record is created,
-    and the shared `ingest_document` pipeline is invoked. On pipeline failure
-    the Document and temp file are both cleaned up to prevent orphaned records.
-
-    Emits INFO lines at: receive, validate, write, dispatch; and an ERROR
-    line on ingest failure (with the exception type and total duration).
-    """
-    # Strip directory components to prevent path traversal.
-    safe_name = PurePath(upload.name).name
-    size_mb = (upload.size or 0) / (1024 * 1024)
-    logger.info(
-        "Received upload %r (%.2f MB) from user=%s",
-        safe_name,
-        size_mb,
-        username,
-    )
-
-    validation_error = _validate_pdf(upload)
-    if validation_error:
-        # Validation should be caught by the caller before reaching this
-        # function, but if it slips through, log it for visibility.
-        logger.warning("Validation failed for %r: %s", safe_name, validation_error)
-
-    logger.info("Validated PDF magic bytes for %r", safe_name)
-
-    temp_path = default_storage.save(f"documents/_tmp_{safe_name}", ContentFile(b""))
-
-    try:
-        # Write uploaded content to the temp file.
-        with default_storage.open(temp_path, "wb") as f:
-            for chunk in upload.chunks():
-                f.write(chunk)
-    except Exception:
-        if default_storage.exists(temp_path):
-            default_storage.delete(temp_path)
-        raise
-
-    full_path = default_storage.path(temp_path)
-    logger.info("Wrote %r to %s", safe_name, temp_path)
-
-    # Create the Document record before running the pipeline so the shared
-    # service can update it directly. We delete it on failure.
-    document = Document.objects.create(
-        name=safe_name,
-        file=temp_path,
-        page_count=0,
-        chunk_count=0,
-    )
-
-    t0 = time.monotonic()
-    try:
-        ingest_document(document, file_path=full_path)
-    except Exception as exc:
-        elapsed = time.monotonic() - t0
-        logger.error(
-            "Ingestion failed for %r after %.2fs: %s: %s",
-            safe_name,
-            elapsed,
-            type(exc).__name__,
-            exc,
-        )
-        document.delete()
-        if default_storage.exists(temp_path):
-            default_storage.delete(temp_path)
-        raise
-    elapsed = time.monotonic() - t0
-    logger.info(
-        "Dispatched ingestion for %r (document_id=%s) in %.2fs",
-        safe_name,
-        document.id,
-        elapsed,
-    )
-
-    return document
-
-
 class HomePageView(View):
     """Public landing page: explains what PolicyIQ is and shows library stats."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
-        """Render the homepage with hero, how-it-works, and library stats.
-
-        Anonymous-accessible per the homepage plan §1.1 ("Visitors (public)"
-        audience) — the brand link in the nav (base.html:21) and any incoming
-        first-time visitor must be able to land on `/`.
-        """
+        """Render the homepage with hero, how-it-works, and library stats."""
         stats = get_library_stats()
         return render(request, "home.html", {"stats": stats})
 
@@ -168,7 +80,7 @@ class UploadPageView(View):
 
             try:
                 username = getattr(getattr(request, "user", None), "username", "anonymous")
-                document = _save_upload_and_ingest(upload, username=username)
+                document = ingest_uploaded_pdf(upload, username=username)
                 results.append({"success": True, "document": document})
             except Exception as exc:
                 results.append({"success": False, "name": upload.name, "error": str(exc)})
@@ -269,7 +181,7 @@ class DocumentUploadAPIView(APIView):
 
             try:
                 username = getattr(getattr(request, "user", None), "username", "anonymous")
-                document = _save_upload_and_ingest(upload, username=username)
+                document = ingest_uploaded_pdf(upload, username=username)
                 results.append(
                     {
                         "success": True,

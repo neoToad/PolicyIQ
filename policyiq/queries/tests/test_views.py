@@ -44,9 +44,6 @@ class AskPageViewTests(SimpleTestCase):
 
     @mock.patch("queries.views.run_query")
     def test_post_streams_answer_when_chunks_found(self, mock_run_query):
-        chunks = [
-            {"text": "Coverage yes.", "page_number": 2, "document_name": "Policy.pdf", "similarity_score": 0.85},
-        ]
         from queries.services.query_pipeline import QueryResult
 
         mock_run_query.return_value = QueryResult(

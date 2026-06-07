@@ -118,7 +118,6 @@ class SafeStreamTests(SimpleTestCase):
         page can ``querySelector`` for it and display a user-visible
         error without breaking the surrounding HTML structure.
         """
-        from queries.exceptions import GenerationError
 
         def gen():
             yield "Answer"
@@ -137,7 +136,6 @@ class SafeStreamTests(SimpleTestCase):
     def test_safe_stream_yields_error_sentinel_on_first_token_failure(self):
         """If the inner generator raises before yielding anything, the wrapper
         still yields one sentinel (not a token, then a sentinel)."""
-        from queries.exceptions import GenerationError
 
         def gen():
             raise GenerationError("immediate failure")
@@ -152,7 +150,6 @@ class SafeStreamTests(SimpleTestCase):
         """Non-GenerationError exceptions propagate uncaught — the wrapper
         only knows how to surface LLM-stream errors. A plain ``ValueError``
         is the inner generator's contract violation and should bubble up."""
-        from queries.exceptions import GenerationError
 
         class UnexpectedError(Exception):
             pass
@@ -170,7 +167,6 @@ class SafeStreamTests(SimpleTestCase):
         """When safe_stream catches an error, the queries.generator logger
         captures an ERROR line with the exception message so operators
         can correlate the user-visible failure with server-side context."""
-        from queries.exceptions import GenerationError
 
         def gen():
             yield "partial"

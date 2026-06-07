@@ -6,16 +6,25 @@ both success and failure (with timing on each stage and the exception type
 when a stage fails), and that the pipeline is atomic — a failure in any
 stage rolls back the PostgreSQL state and compensates the ChromaDB vector
 store to avoid leaving orphan rows or vectors.
+
+Phase 3.3 adds ``IngestUploadedPdfTests`` for the new
+``ingest_uploaded_pdf(upload_file, username=None)`` service entry point
+that owns the temp-file lifecycle and the ``Document.objects.create``
+call — both of which were previously tangled into the view layer.
 """
 
+import tempfile
 from unittest import mock
 
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from documents.exceptions import ChunkingError, ExtractionError, IndexingError
 from documents.models import Chunk, Document
-from documents.services.pipeline import ingest_document
+from documents.services.pipeline import ingest_document, ingest_uploaded_pdf
 
 
 class PipelineLoggingTests(TestCase):
@@ -144,8 +153,6 @@ def _make_document_for_db(name: str = "policy.pdf", page_count: int = 0, chunk_c
     reads `document.file.path` and `document.id`; the file content is mocked
     out in each test.
     """
-    from django.core.files.base import ContentFile
-    from django.core.files.storage import default_storage
 
     temp_path = default_storage.save(f"documents/_atomic_test_{name}", ContentFile(b"%PDF-1.4\n"))
     return Document.objects.create(
@@ -437,3 +444,151 @@ class AtomicityTests(TestCase):
         # Includes document_id and chunk_count so a sweeper can act on it.
         self.assertIn(str(self.document.id), orphan_lines[0])
         self.assertIn("1", orphan_lines[0])  # chunk_count = 1 embedded chunk
+
+
+class IngestUploadedPdfTests(TestCase):
+    """Tests for ``documents.services.pipeline.ingest_uploaded_pdf``.
+
+    The audit-M2 fix moves the temp-file lifecycle and the
+    ``Document.objects.create`` call from the view layer into a single
+    service function. The view becomes a 5-line adapter that calls it.
+    """
+
+    def setUp(self):
+        self.upload = SimpleUploadedFile(
+            "policy.pdf",
+            b"%PDF-1.4 fake content",
+            content_type="application/pdf",
+        )
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
+    def test_ingest_uploaded_pdf_creates_document_and_ingests(self, mock_storage, mock_ingest):
+        """A successful call creates a ``Document`` row, writes the upload
+        to temp storage, and delegates to ``ingest_document`` with the
+        right document id and resolved file path."""
+        mock_storage.save.return_value = "documents/_tmp_policy.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
+
+        def _ingest(document, file_path=None):
+            document.page_count = 2
+            document.chunk_count = 2
+            return {}
+
+        mock_ingest.side_effect = _ingest
+
+        document = ingest_uploaded_pdf(self.upload, username="alice")
+
+        # A Document row was created with the right name.
+        self.assertEqual(Document.objects.count(), 1)
+        self.assertEqual(document.name, "policy.pdf")
+        # ingest_document was called with that document and the resolved
+        # absolute file path so it can read the bytes off disk.
+        mock_ingest.assert_called_once()
+        call_args = mock_ingest.call_args
+        self.assertEqual(call_args.args[0].id, document.id)
+        # file_path is a keyword argument.
+        self.assertEqual(call_args.kwargs["file_path"], "/tmp/media/documents/_tmp_policy.pdf")
+        # The page/chunk counts from the pipeline were saved on the row.
+        self.assertEqual(document.page_count, 2)
+        self.assertEqual(document.chunk_count, 2)
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
+    def test_ingest_uploaded_pdf_deletes_temp_file_on_success(self, mock_storage, mock_ingest):
+        """After a successful ingest, the temp file is removed from storage."""
+        mock_storage.save.return_value = "documents/_tmp_policy.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
+        mock_ingest.return_value = {}
+
+        ingest_uploaded_pdf(self.upload)
+
+        # The temp file was saved once, opened once, and deleted once.
+        self.assertEqual(mock_storage.save.call_count, 1)
+        self.assertEqual(mock_storage.delete.call_count, 1)
+        mock_storage.delete.assert_called_with("documents/_tmp_policy.pdf")
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
+    def test_ingest_uploaded_pdf_rolls_back_on_ingest_document_failure(self, mock_storage, mock_ingest):
+        """When ``ingest_document`` raises, the Document row is deleted and
+        the temp file is removed — no orphan rows or files."""
+        mock_storage.save.return_value = "documents/_tmp_broken.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_broken.pdf"
+        mock_ingest.side_effect = ExtractionError("PDF corrupt")
+
+        with self.assertRaises(ExtractionError):
+            ingest_uploaded_pdf(self.upload)
+
+        # The Document row was rolled back.
+        self.assertEqual(Document.objects.count(), 0)
+        # The temp file was cleaned up.
+        mock_storage.delete.assert_called_with("documents/_tmp_broken.pdf")
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.services.pipeline.default_storage")
+    def test_ingest_uploaded_pdf_writes_upload_chunks_to_storage(self, mock_storage):
+        """The full upload payload lands in the temp file in storage.
+
+        We avoid mocking ``ingest_document`` here so the real write path
+        runs; the focus is the temp-file write, not the pipeline.
+        """
+        mock_storage.save.return_value = "documents/_tmp_policy.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_policy.pdf"
+        # Capture what was written by recording calls to .open(...).write(...).
+        written = bytearray()
+
+        class FakeFile:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def write(self, data):
+                written.extend(data)
+
+        mock_storage.open.return_value = FakeFile()
+        mock_storage.exists.return_value = False  # force save side-effect
+
+        # Patch ingest_document to a no-op so the real pipeline doesn't run.
+        with mock.patch("documents.services.pipeline.ingest_document", return_value={}):
+            ingest_uploaded_pdf(self.upload)
+
+        # The full upload bytes made it to the temp file.
+        self.assertEqual(bytes(written), b"%PDF-1.4 fake content")
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
+    def test_ingest_uploaded_pdf_strips_path_components_from_name(self, mock_storage, mock_ingest):
+        """An upload named ``../../etc/passwd`` becomes ``passwd`` on disk
+        (path traversal protection)."""
+        mock_storage.save.return_value = "documents/_tmp_passwd"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_passwd"
+        mock_ingest.return_value = {}
+
+        evil = SimpleUploadedFile(
+            "../../etc/passwd",
+            b"%PDF-1.4",
+            content_type="application/pdf",
+        )
+
+        document = ingest_uploaded_pdf(evil)
+
+        self.assertEqual(document.name, "passwd")
+
+    def test_ingest_uploaded_pdf_signature_accepts_username_keyword(self):
+        """Audit: ``username`` is keyword-only so callers can't pass a
+        positional ``request`` object and confuse the audit trail."""
+        import inspect
+
+        from documents.services import pipeline
+
+        sig = inspect.signature(pipeline.ingest_uploaded_pdf)
+        self.assertIn("username", sig.parameters)
+        self.assertEqual(sig.parameters["username"].default, None)
+        self.assertEqual(sig.parameters["username"].kind, inspect.Parameter.KEYWORD_ONLY)

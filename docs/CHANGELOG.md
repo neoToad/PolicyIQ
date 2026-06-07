@@ -68,3 +68,13 @@ Per Locked Decision #1 (drop `DocumentDeleteView`, staff-only deletes):
 - 7 new tests in `queries.tests.test_query_pipeline.RunQueryTests`: empty-retriever → no_information, below-threshold → no_information, streams-tokens + citations, safe_stream wrapping, settings-driven top_k (default + override), threshold passed to build_prompt.
 - Existing view tests in `test_views.py` and `test_views_pytest.py` rewired to mock `queries.views.run_query` instead of the now-removed `retrieve_chunks`/`build_prompt`/`generate_response` imports.
 - 232 tests pass (225 baseline + 7 new).
+
+### [Phase3.3] Extract `ingest_uploaded_pdf` service, collapse upload views to adapters
+- New `documents.services.pipeline.ingest_uploaded_pdf(upload, *, username=None)` is the canonical "user uploaded a PDF" entry point. It owns the temp-file lifecycle, the `Document.objects.create` call, and the cleanup on failure.
+- `UploadPageView` and `DocumentUploadAPIView` both delegate to `ingest_uploaded_pdf` and shrink by ~50 lines each. The shared `_save_upload_and_ingest` helper is gone.
+- `username` is keyword-only so callers can't accidentally pass a positional `request` and confuse the audit trail.
+- The temp file is deleted on success (the canonical file lives at `document.file`) and on failure (no orphan files).
+- Path-traversal protection moved into the service: `../../etc/passwd` becomes `passwd` on disk.
+- 6 new tests in `documents.tests.test_pipeline.IngestUploadedPdfTests`: creates Document + delegates, deletes temp on success, rolls back on failure, writes full upload bytes, strips path components, `username` is keyword-only.
+- Existing view tests rewired to mock `documents.services.pipeline.ingest_document` and `documents.services.pipeline.default_storage` (the new home of the lifecycle).
+- 238 tests pass (232 baseline + 6 new); ruff clean.
