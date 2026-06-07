@@ -2,6 +2,8 @@
 
 **Phase 1 COMPLETE — pipeline atomicity in place. Moving to Phase 2 next.**
 
+> **Note on changelog layout (2026-06-07):** The historical changelog was moved to `docs/changelogs/CHANGELOG.md`. The new top-level `docs/CHANGELOG.md` is the live file for Phase 2+ entries; it points to the archive in its header.
+
 ## Status
 - Branch `feature/policyiq-refactor` checked out from `main`
 - Phase 0 fully complete (settings + ollama_client + per-module migrations)

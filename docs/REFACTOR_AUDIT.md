@@ -188,7 +188,7 @@ No test exercises the mixed-success case (one PDF OK, one PDF rejected). The "al
 **Fix:** Pick one. The pytest-style file's docstring (`test_views_pytest.py:1-14`) says it exists to "demonstrate coexistence" — that's a one-time experiment, not an ongoing need. Either delete `test_views_pytest.py` (the `conftest.py` fixtures are still useful for any future pytest tests) or delete the equivalent tests in `test_views.py` and commit to pytest.
 
 ## Low — `CHANGELOG.md` line 99 mentions `lru_cache` and one-time init
-**File:** `docs/CHANGELOG.md:99`
+**File:** `docs/changelogs/CHANGELOG.md:99`
 **Issue:** Not a code finding, but a doc/code mismatch: the changelog says "`get_collection()` now reuses the singleton client instead of creating a new one on every call". The current code is correct, but if a future refactor moves the ChromaDB client to a Django app-config-level singleton (a more conventional Django pattern), the helper is no longer needed and the doc claim becomes stale.
 **Fix:** Consider whether the lru_cache trick should stay or be replaced with a module-level lazy singleton (`_client = None; def get_client(): global _client; if _client is None: _client = ...; return _client`). The current pattern works, but the "magic" of lru_cache on a chromadb client is unusual.
 
