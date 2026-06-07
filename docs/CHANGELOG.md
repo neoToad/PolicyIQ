@@ -87,3 +87,11 @@ Per Locked Decision #1 (drop `DocumentDeleteView`, staff-only deletes):
 - 6 new tests in `documents.tests.test_uploads_helper.ProcessUploadsTests`: success dict, validation error → 400, pipeline failure → 500, mixed success+validation → 201, mixed success+pipeline-failure → 201, username forwarded.
 - Existing view tests rewired to mock `documents.views.upload.*` (the new home of the imports).
 - 244 tests pass (238 baseline + 6 new); ruff clean; pre-commit clean.
+
+### [Phase3.5] Verify Phase 3
+- `pytest policyiq/` → **250 passed** (244 from Phase 3.4 + 6 from `test_timing.py` re-enabled by the in-memory SQLite path).
+- `ruff check policyiq/` → all checks passed.
+- `ruff format --check policyiq/` → 76 files already formatted.
+- `pre-commit run --all-files` → all 10 hooks pass.
+- `python manage.py check` → 0 issues.
+- **Audit impact** (Phase 3 as a whole): closes L11 (upload-loop duplication, via 3.4), L13 (`safe_stream` mid-stream error handling, via 3.2), and the service-layer split is the precondition for M9/M10/M12 coverage work in Phase 4.

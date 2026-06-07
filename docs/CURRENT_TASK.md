@@ -1,6 +1,6 @@
 # Current Task
 
-**Phase 3 IN PROGRESS — view → service consolidation. Sub-phases 3.1–3.4 done; verifying (3.5) next.**
+**Phase 3 COMPLETE — view → service consolidation. Phase 4 starting: test coverage batch.**
 
 > **Note on changelog layout (2026-06-07):** The historical changelog was moved to `docs/changelogs/CHANGELOG.md`. The new top-level `docs/CHANGELOG.md` is the live file for Phase 2+ entries; it points to the archive in its header.
 
@@ -9,11 +9,8 @@
 - Phase 0 fully complete (settings + ollama_client + per-module migrations)
 - Phase 1 fully complete (pipeline atomicity + vector-orphan marker)
 - Phase 2 fully complete (deletion service + view consolidation)
-- Phase 3.1 done: `run_query` service + view adapters
-- Phase 3.2 done: `safe_stream` sentinel for mid-stream LLM errors
-- Phase 3.3 done: `ingest_uploaded_pdf` service + view adapters
-- Phase 3.4 done: `_process_uploads` helper + `documents/views` package
-- Phase 3.5 next: verify Phase 3 (full test suite, ruff, pre-commit)
+- **Phase 3 fully complete** — `run_query`, `safe_stream`, `ingest_uploaded_pdf`, `_process_uploads` all extracted
+- **Phase 4 starting** — test coverage batch (audit H7, H8, M7, M9, M10, M11, M12, M14, L1, L8, L11, L13)
 - 4 user decisions locked in:
   1. **Phase 2.2**: Drop `DocumentDeleteView`, staff-only deletes (matches default)
   2. **Phase 5.1**: **KEEP both** (PG `Chunk` model + ChromaDB text) — user override from default; document the rationale in `CLAUDE.md`
@@ -37,5 +34,12 @@
 - **2.2**: Dropped `DocumentDeleteView` (Locked Decision #1). All delete traffic goes through the staff-only path. `policyiq/urls.py` lost the `documents/<uuid:pk>/delete/` URL and the `document-delete` name; `templates/documents/history.html` now points the delete button at `staff-document-delete`. Net diff: 16 lines deleted, 1 line added. This closes audit H2 (delete atomicity, via 2.1), M7 (permission gap on the public delete view), and L18 (95% identical views) in one move.
 - **2.3**: Verification — `python manage.py test` → 220 passed (215 baseline + 5 new `DeletionServiceTests`); `ruff check policyiq/` clean; `ruff format --check policyiq/` clean (71 files); `pre-commit run --all-files` clean; `python manage.py check` → 0 issues. URL smoke: `reverse('staff-document-delete', ...)` returns `/admin/documents/<uuid>/delete/`; `reverse('document-delete', ...)` raises `NoReverseMatch` (expected — the public view is gone).
 
-## Next — Phase 3
-View → service consolidation: extract `run_query`, `safe_stream`, `ingest_uploaded_pdf`, and `_process_uploads` from the view layer into the service layer. This is the bridge from the audit-H work (atomicity, paths) to the audit-M work (consolidation, dedup).
+## Phase 3 — done
+- **3.1**: Extracted `queries.services.query_pipeline.run_query(question, document_id, *, top_k, threshold) -> QueryResult` collapsing retrieve → build_prompt → stream into one service call. `AskPageView` and `QueryAPIView` are now thin adapters (4-7 lines each) that translate `QueryResult` into HTML or JSON. 7 new `RunQueryTests` in `test_query_pipeline.py`; view tests rewired to mock `queries.views.run_query`. 232 tests pass.
+- **3.2**: Wrapped `generate_response` with `queries.services.generator.safe_stream(iterator)`. Catches `QueryError` (and subclasses like `GenerationError`) mid-stream and yields `<!-- error: <message> -->` sentinel so HTMX clients render a "stream interrupted" indicator instead of a truncated response. Audit H6 closed. 5 new `SafeStreamTests`; 225 tests pass.
+- **3.3**: Extracted `documents.services.pipeline.ingest_uploaded_pdf(upload, *, username=None) -> Document` — the canonical "user uploaded a PDF" entry point. Owns temp-file lifecycle, `Document.objects.create`, cleanup on failure. `username` is keyword-only; path-traversal protection via `PurePath(upload.name).name`. Both upload views delegate to it. 6 new `IngestUploadedPdfTests`; 238 tests pass.
+- **3.4**: Extracted `documents.views._uploads._process_uploads(uploads, *, username) -> (results, status_code)`. The two upload views shrink to 4-line adapters. Status-code logic preserved verbatim (any success → 201, all-validation → 400, all-failure → 500). `documents/views.py` became a `documents/views/` package with `__init__.py` re-exporting everything. 6 new `ProcessUploadsTests`; 244 tests pass.
+- **3.5**: Verification — `pytest policyiq/` → **250 passed**; `ruff check policyiq/` clean; `ruff format --check policyiq/` clean (76 files); `pre-commit run --all-files` clean (10 hooks); `python manage.py check` → 0 issues. **Audit impact**: closes L11 (upload-loop dedup), L13 (mid-stream error surfacing), and creates the service-layer split that M9/M10/M12 (Phase 4) build on.
+
+## Next — Phase 4
+Test coverage batch: the audit-M findings that require explicit test coverage — H7, H8, M7, M9, M10, M11, M12, M14, L1, L8, L11, L13. The service-layer split from Phase 3 is the precondition.
