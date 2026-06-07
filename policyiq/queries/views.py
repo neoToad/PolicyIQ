@@ -16,9 +16,8 @@ from rest_framework.views import APIView
 
 from queries.serializers import CitationSerializer, QueryRequestSerializer
 from queries.services import health
-from queries.services.citations import build_citations
-from queries.services.generator import build_prompt, generate_response
-from queries.services.retriever import MAX_QUESTION_LOG_CHARS, retrieve_chunks
+from queries.services.query_pipeline import run_query
+from queries.services.retriever import MAX_QUESTION_LOG_CHARS
 from queries.throttles import QueryAnonRateThrottle, QueryUserRateThrottle
 
 logger = logging.getLogger("queries.views")
@@ -31,6 +30,16 @@ def _top_k() -> int:
     tests and live ops tuning is honored.
     """
     return settings.RETRIEVAL_TOP_K
+
+
+def _log_query_receipt(question: str, username: str, top_k: int) -> None:
+    """Emit the 'Query received' line with the truncated question.
+
+    Centralized so the HTML and API views produce an identical log line
+    and the truncation is consistent across both paths.
+    """
+    safe_q = question[:MAX_QUESTION_LOG_CHARS] + "..." if len(question) > MAX_QUESTION_LOG_CHARS else question
+    logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, top_k)
 
 
 class AskPageView(View):
@@ -53,33 +62,27 @@ class AskPageView(View):
             )
 
         username = getattr(getattr(request, "user", None), "username", "anonymous")
-        safe_q = question[:MAX_QUESTION_LOG_CHARS] + "..." if len(question) > MAX_QUESTION_LOG_CHARS else question
-        t0 = time.monotonic()
         top_k = _top_k()
-        logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, top_k)
+        _log_query_receipt(question, username, top_k)
 
-        chunks = retrieve_chunks(question, document_id=document_id, top_k=top_k)
-        # build_prompt defaults similarity_threshold to settings.SIMILARITY_THRESHOLD.
-        prompt = build_prompt(question, chunks)
+        t0 = time.monotonic()
+        result = run_query(question, document_id, top_k=top_k, threshold=settings.SIMILARITY_THRESHOLD)
 
-        if prompt is None:
+        if result.kind == "no_information":
             elapsed = time.monotonic() - t0
             logger.info("Returned 'no relevant information' response in %.2fs", elapsed)
             return HttpResponse("<p>No relevant information found in the uploaded documents.</p>")
 
-        citations = build_citations(chunks)
-
         def stream():
             yield '<div class="card"><p style="white-space: pre-wrap;">'
-            yield from generate_response(prompt)
+            yield from result.answer_stream
             yield "</p></div>"
 
         response = StreamingHttpResponse(stream(), content_type="text/html")
-        response["X-Citations"] = json.dumps(citations)
+        response["X-Citations"] = json.dumps(result.citations)
         logger.info(
-            "Streamed answer (prompt=%d chars, citations=%d) in %.2fs",
-            len(prompt),
-            len(citations),
+            "Streamed answer (citations=%d) in %.2fs",
+            len(result.citations),
             time.monotonic() - t0,
         )
         return response
@@ -103,16 +106,13 @@ class QueryAPIView(APIView):
             document_id = str(document_id)
 
         username = getattr(getattr(request, "user", None), "username", "anonymous")
-        safe_q = question[:MAX_QUESTION_LOG_CHARS] + "..." if len(question) > MAX_QUESTION_LOG_CHARS else question
-        t0 = time.monotonic()
         top_k = _top_k()
-        logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, top_k)
+        _log_query_receipt(question, username, top_k)
 
-        chunks = retrieve_chunks(question, document_id=document_id, top_k=top_k)
-        # build_prompt defaults similarity_threshold to settings.SIMILARITY_THRESHOLD.
-        prompt = build_prompt(question, chunks)
+        t0 = time.monotonic()
+        result = run_query(question, document_id, top_k=top_k, threshold=settings.SIMILARITY_THRESHOLD)
 
-        if prompt is None:
+        if result.kind == "no_information":
             elapsed = time.monotonic() - t0
             logger.info("Returned 'no relevant information' response in %.2fs", elapsed)
             return Response(
@@ -120,19 +120,17 @@ class QueryAPIView(APIView):
                 status=status.HTTP_200_OK,
             )
 
-        citations = build_citations(chunks)
-        citation_serializer = CitationSerializer(data=citations, many=True)
+        citation_serializer = CitationSerializer(data=result.citations, many=True)
         citation_serializer.is_valid(raise_exception=True)
 
         def stream():
-            yield from generate_response(prompt)
+            yield from result.answer_stream
 
         response = StreamingHttpResponse(stream(), content_type="text/plain")
         response["X-Citations"] = json.dumps(citation_serializer.data)
         logger.info(
-            "Streamed answer (prompt=%d chars, citations=%d) in %.2fs",
-            len(prompt),
-            len(citations),
+            "Streamed answer (citations=%d) in %.2fs",
+            len(result.citations),
             time.monotonic() - t0,
         )
         return response

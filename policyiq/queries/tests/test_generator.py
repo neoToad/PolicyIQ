@@ -1,15 +1,20 @@
-"""Tests for the `queries.generator` logger.
+"""Tests for the `queries.generator` logger and safe_stream wrapper.
 
 The ask path's "Streaming from X" → "First token in T" → "Generated N tokens
 in T" sequence is the operator's answer to "why was that answer so slow?".
 These tests lock that narrative in place.
+
+Phase 3.2 adds tests for `safe_stream`, the wrapper that surfaces
+mid-stream ``GenerationError`` to the HTMX client via a sentinel marker
+instead of truncating the response silently.
 """
 
 from unittest import mock
 
 from django.test import SimpleTestCase, override_settings
 
-from queries.services.generator import generate_response
+from queries.exceptions import GenerationError
+from queries.services.generator import generate_response, safe_stream
 
 
 class GeneratorLoggingTests(SimpleTestCase):
@@ -81,3 +86,99 @@ class GeneratorLoggingTests(SimpleTestCase):
         self.assertEqual(len(completion_lines), 1)
         first_token_lines = [line for line in cm.output if "First token in" in line]
         self.assertEqual(len(first_token_lines), 0)
+
+
+class SafeStreamTests(SimpleTestCase):
+    """Tests for ``safe_stream`` — the mid-stream error sentinel wrapper.
+
+    The audit-H6 fix: when the underlying generator raises
+    :class:`GenerationError` after some tokens have already been yielded,
+    the ``StreamingHttpResponse`` truncates silently and HTMX shows a
+    partial answer. ``safe_stream`` yields a structured sentinel marker
+    so the client can render a "stream interrupted" indicator without
+    crashing the page.
+    """
+
+    def test_safe_stream_passes_through_clean_iterators(self):
+        """A generator that completes normally yields every token unchanged."""
+
+        def gen():
+            yield "Hello"
+            yield " world"
+            yield "!"
+
+        result = list(safe_stream(gen()))
+        self.assertEqual(result, ["Hello", " world", "!"])
+
+    def test_safe_stream_yields_tokens_then_error_sentinel_on_generation_error(self):
+        """When the inner generator yields 2 tokens then raises GenerationError,
+        the wrapper yields those 2 tokens and then a sentinel marker.
+
+        The sentinel format is ``<!-- error: <message> -->`` so the HTMX
+        page can ``querySelector`` for it and display a user-visible
+        error without breaking the surrounding HTML structure.
+        """
+        from queries.exceptions import GenerationError
+
+        def gen():
+            yield "Answer"
+            yield " is"
+            raise GenerationError("Ollama timed out")
+
+        result = list(safe_stream(gen()))
+
+        # First two tokens pass through unchanged.
+        self.assertEqual(result[:2], ["Answer", " is"])
+        # Then exactly one error sentinel.
+        sentinel_lines = [r for r in result[2:] if r.startswith("<!-- error:")]
+        self.assertEqual(len(sentinel_lines), 1)
+        self.assertIn("Ollama timed out", sentinel_lines[0])
+
+    def test_safe_stream_yields_error_sentinel_on_first_token_failure(self):
+        """If the inner generator raises before yielding anything, the wrapper
+        still yields one sentinel (not a token, then a sentinel)."""
+        from queries.exceptions import GenerationError
+
+        def gen():
+            raise GenerationError("immediate failure")
+            yield  # pragma: no cover — unreachable
+
+        result = list(safe_stream(gen()))
+        self.assertEqual(len(result), 1)
+        self.assertTrue(result[0].startswith("<!-- error:"))
+        self.assertIn("immediate failure", result[0])
+
+    def test_safe_stream_does_not_swallow_non_generation_exceptions(self):
+        """Non-GenerationError exceptions propagate uncaught — the wrapper
+        only knows how to surface LLM-stream errors. A plain ``ValueError``
+        is the inner generator's contract violation and should bubble up."""
+        from queries.exceptions import GenerationError
+
+        class UnexpectedError(Exception):
+            pass
+
+        def gen():
+            yield "ok"
+            raise UnexpectedError("something else broke")
+
+        # safe_stream catches GenerationError (and QueryError base); for
+        # unexpected exceptions it lets them propagate.
+        with self.assertRaises(UnexpectedError):
+            list(safe_stream(gen()))
+
+    def test_safe_stream_logs_error_line_with_message(self):
+        """When safe_stream catches an error, the queries.generator logger
+        captures an ERROR line with the exception message so operators
+        can correlate the user-visible failure with server-side context."""
+        from queries.exceptions import GenerationError
+
+        def gen():
+            yield "partial"
+            raise GenerationError("connection reset")
+
+        with self.assertLogs("queries.generator", level="ERROR") as cm:
+            list(safe_stream(gen()))
+
+        # At least one ERROR line mentions the message.
+        error_lines = [line for line in cm.output if "connection reset" in line]
+        self.assertEqual(len(error_lines), 1)

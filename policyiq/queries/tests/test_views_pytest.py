@@ -67,16 +67,15 @@ class TestAskPageViewPost:
         assert response.status_code == 400
         assert "Please enter a question" in response.content.decode()
 
-    @mock.patch("queries.views.generate_response")
-    @mock.patch("queries.views.build_prompt")
-    @mock.patch("queries.views.retrieve_chunks")
-    def test_streams_answer_when_chunks_found(self, mock_retrieve, mock_build_prompt, mock_generate, ask_view):
-        chunks = [
-            {"text": "Coverage yes.", "page_number": 2, "document_name": "Policy.pdf", "similarity_score": 0.85},
-        ]
-        mock_retrieve.return_value = chunks
-        mock_build_prompt.return_value = "prompt text"
-        mock_generate.return_value = iter(["Answer", " is", " yes."])
+    @mock.patch("queries.views.run_query")
+    def test_streams_answer_when_chunks_found(self, mock_run_query, ask_view):
+        from queries.services.query_pipeline import QueryResult
+
+        mock_run_query.return_value = QueryResult(
+            kind="answer",
+            answer_stream=iter(["Answer", " is", " yes."]),
+            citations=[],
+        )
 
         factory = RequestFactory()
         request = factory.post("/ask/", {"question": "Is it covered?"})
@@ -85,18 +84,15 @@ class TestAskPageViewPost:
         assert response.status_code == 200
         content = b"".join(response.streaming_content).decode("utf-8")
         assert content == '<div class="card"><p style="white-space: pre-wrap;">Answer is yes.</p></div>'
-        mock_retrieve.assert_called_once_with("Is it covered?", document_id=None, top_k=settings.RETRIEVAL_TOP_K)
-        # build_prompt defaults similarity_threshold to settings.SIMILARITY_THRESHOLD
-        # — the view no longer hardcodes it.
-        mock_build_prompt.assert_called_once_with("Is it covered?", chunks)
-        mock_generate.assert_called_once_with("prompt text")
+        mock_run_query.assert_called_once_with(
+            "Is it covered?", None, top_k=settings.RETRIEVAL_TOP_K, threshold=settings.SIMILARITY_THRESHOLD
+        )
 
-    @mock.patch("queries.views.generate_response")
-    @mock.patch("queries.views.build_prompt")
-    @mock.patch("queries.views.retrieve_chunks")
-    def test_returns_message_when_no_relevant_chunks(self, mock_retrieve, mock_build_prompt, mock_generate, ask_view):
-        mock_retrieve.return_value = []
-        mock_build_prompt.return_value = None
+    @mock.patch("queries.views.run_query")
+    def test_returns_message_when_no_relevant_chunks(self, mock_run_query, ask_view):
+        from queries.services.query_pipeline import QueryResult
+
+        mock_run_query.return_value = QueryResult(kind="no_information")
 
         factory = RequestFactory()
         request = factory.post("/ask/", {"question": "Is it covered?"})
@@ -104,18 +100,16 @@ class TestAskPageViewPost:
 
         assert response.status_code == 200
         assert "No relevant information found" in response.content.decode()
-        mock_generate.assert_not_called()
 
-    @mock.patch("queries.views.generate_response")
-    @mock.patch("queries.views.build_prompt")
-    @mock.patch("queries.views.retrieve_chunks")
-    def test_passes_document_id_to_retriever(self, mock_retrieve, mock_build_prompt, mock_generate, ask_view):
-        chunks = [
-            {"text": "Coverage yes.", "page_number": 2, "document_name": "Policy.pdf", "similarity_score": 0.85},
-        ]
-        mock_retrieve.return_value = chunks
-        mock_build_prompt.return_value = "prompt text"
-        mock_generate.return_value = iter(["Yes"])
+    @mock.patch("queries.views.run_query")
+    def test_passes_document_id_to_retriever(self, mock_run_query, ask_view):
+        from queries.services.query_pipeline import QueryResult
+
+        mock_run_query.return_value = QueryResult(
+            kind="answer",
+            answer_stream=iter(["Yes"]),
+            citations=[],
+        )
 
         factory = RequestFactory()
         request = factory.post(
@@ -125,26 +119,36 @@ class TestAskPageViewPost:
         response = ask_view(request)
 
         assert response.status_code == 200
-        mock_retrieve.assert_called_once_with(
-            "Is it covered?", document_id="11111111-1111-1111-1111-111111111111", top_k=settings.RETRIEVAL_TOP_K
+        mock_run_query.assert_called_once_with(
+            "Is it covered?",
+            "11111111-1111-1111-1111-111111111111",
+            top_k=settings.RETRIEVAL_TOP_K,
+            threshold=settings.SIMILARITY_THRESHOLD,
         )
 
-    @mock.patch("queries.views.generate_response")
-    @mock.patch("queries.views.build_prompt")
-    @mock.patch("queries.views.retrieve_chunks")
-    def test_includes_x_citations_header(self, mock_retrieve, mock_build_prompt, mock_generate, ask_view):
-        chunks = [
+    @mock.patch("queries.views.run_query")
+    def test_includes_x_citations_header(self, mock_run_query, ask_view):
+        from queries.services.query_pipeline import QueryResult
+
+        citations = [
             {
-                "text": "Coverage is approved for this procedure.",
-                "page_number": 3,
                 "document_name": "Policy.pdf",
+                "page_number": 3,
                 "similarity_score": 0.92,
+                "text_preview": "Coverage is approved for this procedure."[:150],
             },
-            {"text": "PA not needed.", "page_number": 5, "document_name": "Policy.pdf", "similarity_score": 0.78},
+            {
+                "document_name": "Policy.pdf",
+                "page_number": 5,
+                "similarity_score": 0.78,
+                "text_preview": "PA not needed.",
+            },
         ]
-        mock_retrieve.return_value = chunks
-        mock_build_prompt.return_value = "prompt text"
-        mock_generate.return_value = iter(["Yes"])
+        mock_run_query.return_value = QueryResult(
+            kind="answer",
+            answer_stream=iter(["Yes"]),
+            citations=citations,
+        )
 
         factory = RequestFactory()
         request = factory.post("/ask/", {"question": "Is it covered?"})
@@ -152,9 +156,9 @@ class TestAskPageViewPost:
 
         assert response.status_code == 200
         assert "X-Citations" in response
-        citations = json.loads(response["X-Citations"])
-        assert len(citations) == 2
-        assert citations[0]["document_name"] == "Policy.pdf"
-        assert citations[0]["page_number"] == 3
-        assert citations[0]["similarity_score"] == 0.92
-        assert citations[0]["text_preview"] == "Coverage is approved for this procedure."[:150]
+        parsed = json.loads(response["X-Citations"])
+        assert len(parsed) == 2
+        assert parsed[0]["document_name"] == "Policy.pdf"
+        assert parsed[0]["page_number"] == 3
+        assert parsed[0]["similarity_score"] == 0.92
+        assert parsed[0]["text_preview"] == "Coverage is approved for this procedure."[:150]

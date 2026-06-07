@@ -52,3 +52,19 @@ Per Locked Decision #1 (drop `DocumentDeleteView`, staff-only deletes):
 - `pre-commit run --all-files` → all 10 hooks pass.
 - `python manage.py check` → 0 issues.
 - URL smoke confirmed: `staff-document-delete` reverses to the staff URL, `document-delete` is gone.
+
+### [Phase3.2] Wrap `generate_response` to surface mid-stream errors via sentinel marker
+- Added `queries.services.generator.safe_stream(iterator)` wrapper that catches `QueryError` (and subclasses like `GenerationError`) mid-stream and yields a structured `<!-- error: <message> -->` sentinel so HTMX clients can render a "stream interrupted" indicator instead of a truncated response (audit H6).
+- The wrapper logs the caught exception at ERROR level for operator correlation.
+- Non-`QueryError` exceptions (e.g., `ValueError`) propagate unchanged — only LLM-stream failures are caught.
+- 5 new tests in `queries.tests.test_generator.SafeStreamTests`: clean pass-through, partial-token + sentinel, immediate-failure sentinel, non-`QueryError` propagation, ERROR log line on caught failure.
+- 225 tests pass (220 baseline + 5 new).
+
+### [Phase3.1] Extract `run_query` service, collapse `QueryAPIView` and `AskPageView` to adapters
+- New `queries.services.query_pipeline` module with `QueryResult` dataclass and `run_query(question, document_id, *, top_k, threshold)` that collapses the retrieve → build_prompt → stream sequence into one service-layer function.
+- `run_query` wraps `generate_response` in `safe_stream` so mid-stream errors surface to the client instead of truncating.
+- `queries.views.AskPageView.post` and `QueryAPIView.post` now each call `run_query` and translate the `QueryResult` into HTML or JSON. The two views share a new `_log_query_receipt` helper to keep the "Query received" log line consistent.
+- `build_citations` and `generate_response` are no longer imported in `views.py` — they live behind the pipeline.
+- 7 new tests in `queries.tests.test_query_pipeline.RunQueryTests`: empty-retriever → no_information, below-threshold → no_information, streams-tokens + citations, safe_stream wrapping, settings-driven top_k (default + override), threshold passed to build_prompt.
+- Existing view tests in `test_views.py` and `test_views_pytest.py` rewired to mock `queries.views.run_query` instead of the now-removed `retrieve_chunks`/`build_prompt`/`generate_response` imports.
+- 232 tests pass (225 baseline + 7 new).

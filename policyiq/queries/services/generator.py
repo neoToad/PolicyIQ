@@ -14,7 +14,7 @@ from collections.abc import Iterator
 from django.conf import settings
 
 from policyiq import ollama
-from queries.exceptions import GenerationError
+from queries.exceptions import GenerationError, QueryError
 
 try:
     import anthropic
@@ -22,6 +22,37 @@ except ImportError:  # pragma: no cover
     anthropic = None  # type: ignore
 
 logger = logging.getLogger("queries.generator")
+
+
+def safe_stream(iterator):
+    """Wrap a token iterator so mid-stream :class:`GenerationError` is surfaced.
+
+    **Audit H6 fix:** if the underlying generator raises after some tokens
+    have already been yielded, Django's ``StreamingHttpResponse`` would
+    truncate the response silently and HTMX would display a partial
+    answer with no error indicator. This wrapper catches
+    :class:`GenerationError` (and any :class:`QueryError` subclass), logs
+    the failure, and yields a structured sentinel marker
+    (``<!-- error: <message> -->``) so the client can render a
+    user-visible "stream interrupted" indicator.
+
+    Other exception types propagate unchanged — only LLM-stream failures
+    are caught; an unexpected ``ValueError`` from the inner generator
+    still bubbles up to surface the bug.
+
+    Args:
+        iterator: A generator that yields string tokens.
+
+    Yields:
+        Each token from ``iterator`` unchanged, followed by at most one
+        ``<!-- error: ... -->`` sentinel on a caught
+        :class:`GenerationError`.
+    """
+    try:
+        yield from iterator
+    except QueryError as exc:
+        logger.error("safe_stream caught %s mid-stream: %s", type(exc).__name__, exc)
+        yield f"<!-- error: {exc} -->"
 
 
 def _generate_anthropic(prompt: str) -> Iterator[str]:
