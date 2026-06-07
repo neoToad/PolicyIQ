@@ -655,3 +655,16 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
   - `SimilarityContextProcessorTests` (3) — direct call, override_settings, and that the processor is listed in `Engine.get_default().context_processors`
   - `AskTemplateThresholdInjectionTests` (3) — render the template and assert: default render has no `> 0.75` literal, override of `SIMILARITY_BAR_HIGH=0.81` produces `0.81` not `0.75`, override of `SIMILARITY_THRESHOLD=0.42` produces `0.42` not `0.5`
 - All 194 tests pass; ruff clean
+
+### [Phase0.2] Add shared Ollama client with retry + error-envelope detection
+- New `policyiq/policyiq/ollama.py` consolidates the `requests.post` + retry/backoff pattern that lived in `embedder._embed_batch_with_retry`, `embedder._embed_single_with_retry`, and `generator._generate_ollama` (audit H4)
+- Public API:
+  - `OllamaError` (with `EmbeddingError` / `GenerationError` aliases for back-compat)
+  - `post_json(path, payload, *, timeout)` — POST + shared retry + JSON parse, raises `OllamaError` on transport failure, HTTP error, or `{"error": "..."}` envelope (audit M8)
+  - `post_stream(path, payload, *, timeout)` — streaming variant for `/api/generate`, yields decoded JSON lines, surfaces `ChunkedEncodingError` as `OllamaError` (audit M10)
+  - `embed_texts(model, texts)`, `embed_query(model, text)`, `generate(model, prompt, *, stream)` — thin wrappers
+  - `ping()` — `GET /api/tags` health probe (audit L20)
+  - `is_error_envelope(data)` and `validate_embedding_vector(vec)` — error-shape detectors (audit M8)
+- 22 new tests in `tests/test_ollama_client.py` covering: post_json success/retry/exhaustion/HTTP-error/envelope, post_stream success/blank-line-skip/midstream-disconnect/envelope, validate_embedding_vector accept/reject, is_error_envelope true/false, ping 200/connection-error/HTTP-error, and the four thin wrappers
+- All 216 tests pass; ruff clean
+- **Improvement beyond spec**: Wrapped the final `OllamaError` to include `last_exc` in the message — operators reading the health-check log can see the underlying transport error without digging into tracebacks
