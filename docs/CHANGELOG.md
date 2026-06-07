@@ -695,3 +695,11 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - 4 old `CheckOllamaTests` (using `requests.get` mocks) replaced with 2 tests that mock `ollama.ping`; trailing-slash test deleted (URL now lives in client config)
 - New `HealthOllamaClientTests` (2 tests) pin the boundary: `health` module imports `ollama`, not `requests`
 - All 215 tests pass; ruff clean
+
+### [Phase0.3] Verify Phase 0
+- `pytest -x` → 215 passed
+- `ruff check policyiq/` → all checks passed
+- `ruff format --check policyiq/` → 70 files already formatted
+- `python manage.py check` → 0 issues
+- Live smoke test: dev server boots; `/api/health/` returns 200 with `{"status":"healthy","dependencies":{"postgresql":{"status":"up"},"chromadb":{"status":"up"},"ollama":{"status":"up"}}}` (the new `ollama.ping()` path); `/`, `/ask/`, `/upload/`, `/history/` return 200; `/admin/` returns 302 → login
+- All five services (embedder, generator, health, ollama_client, retriever/chunker) now flow through the same Ollama HTTP client with one retry policy and one error-envelope contract
