@@ -3,7 +3,7 @@ This file is one slice of the 6-phase refactor described in docs/prompts/refacto
 Commit format: <type>(<scope>): <summary> [PhaseN.X]. Read the prompt's Git Setup, TDD Rules, and Locked Decisions sections before starting.
 -->
 
-# Phase 0 — Foundation: shared settings + shared Ollama client (touch everything else)
+# Phase 0 — Foundation: shared settings + shared Ollama client (touch everything else) COMPLETED
 
 **Why first:** The High finding "Hardcoded model names, URLs, and tunables" (audit H3) and the High finding "Duplicated Ollama HTTP call pattern" (audit H4) both touch 4–5 modules. Several later phases (H1, H5, H6, M1, M13, L9) consume the new client or the new settings, so building this first prevents rework.
 
