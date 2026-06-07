@@ -3,13 +3,17 @@
 Each check returns a dict with a ``status`` key ("up" or "down") and an
 optional ``error`` key describing the failure. Callers (e.g. the health
 view) aggregate these to decide on an overall HTTP status.
+
+Phase 0.2e: ``check_ollama`` delegates to :func:`policyiq.ollama.ping`
+so the retry/error-envelope logic stays in the shared client and the
+health check just reports the boolean reachability.
 """
 
 import logging
 
-import requests
-from django.conf import settings
 from django.db import connection
+
+from policyiq import ollama
 
 logger = logging.getLogger("queries.health")
 
@@ -36,13 +40,15 @@ def check_chromadb(get_collection) -> dict:
         return {"status": "down", "error": str(exc)}
 
 
-def check_ollama(timeout: float = 2.0) -> dict:
-    """Verify Ollama is reachable by calling ``GET /api/tags``."""
-    ollama_url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags"
-    try:
-        response = requests.get(ollama_url, timeout=timeout)
-        response.raise_for_status()
+def check_ollama() -> dict:
+    """Verify Ollama is reachable via ``GET /api/tags``.
+
+    Delegates to :func:`policyiq.ollama.ping`, which owns the HTTP call
+    and the broad-exception catch. The health view gets a single
+    boolean; the only error message we surface is the generic
+    "Ollama unreachable" because the client logs the actual cause.
+    """
+    if ollama.ping():
         return {"status": "up"}
-    except Exception as exc:  # pragma: no cover - exercised via tests
-        logger.warning("Health check: Ollama unreachable: %s", exc)
-        return {"status": "down", "error": str(exc)}
+    logger.warning("Health check: Ollama unreachable")
+    return {"status": "down", "error": "Ollama unreachable"}

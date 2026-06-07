@@ -686,3 +686,12 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - New `GeneratorOllamaClientTests` (3 tests) pin the new boundary: `generator` module imports `ollama` (not `requests`) and no longer exposes `_generate_ollama`
 - Legacy `test_generator.py` (4 tests) updated from `requests.post` mocks to `ollama.generate` mocks returning string tokens (the new client contract)
 - All 215 tests pass; ruff clean
+
+### [Phase0.2e] Migrate health check to use shared ollama client
+- `queries/services/health.py::check_ollama` now delegates to `ollama.ping()` instead of making its own `requests.get("/api/tags")` call
+- Dropped `requests` and `settings.OLLAMA_BASE_URL` imports (the URL lives in the client)
+- The function returns `{"status": "up"}` on ping True, `{"status": "down", "error": "Ollama unreachable"}` on False (the actual cause is logged by the client)
+- Removed `timeout` parameter — the client owns the timeout
+- 4 old `CheckOllamaTests` (using `requests.get` mocks) replaced with 2 tests that mock `ollama.ping`; trailing-slash test deleted (URL now lives in client config)
+- New `HealthOllamaClientTests` (2 tests) pin the boundary: `health` module imports `ollama`, not `requests`
+- All 215 tests pass; ruff clean
