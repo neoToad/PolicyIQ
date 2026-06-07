@@ -676,3 +676,13 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - 3 new `EmbedderOllamaClientTests` assert the embedder imports `ollama` (not `requests`) and that vectors are still L2-normalized after the client returns them
 - 5 weak `EmbedderSettingsTests` (URL/timeout/retry at the embedder layer) replaced with a single strong test asserting the client-layer `OllamaError` propagates as `EmbeddingError` — the URL/timeout/retry settings now live in the client module and are tested in `test_ollama_client.py` / `test_settings.py`
 - All 215 tests pass; ruff clean
+
+### [Phase0.2d] Migrate generator to use shared ollama client
+- `queries/services/generator.py` no longer imports `requests` or owns a retry loop — the private `_generate_ollama` helper is replaced by `_ollama_token_stream`, a thin pass-through that calls `ollama.generate(model, prompt, stream=True)` and maps `OllamaError` → `GenerationError`
+- Removed module-level imports: `json`, `requests`, `policyiq.llm_config.get_ollama_generate_url` (URL/retry now in the client)
+- `GenerateResponseTests` (2 tests) and `DispatchTests.test_generate_response_dispatches_to_ollama_by_default` rewritten to mock `queries.services.generator.ollama.generate` instead of `requests.post`
+- New `test_generate_response_propagates_ollama_error` asserts the new `OllamaError` → `GenerationError` boundary
+- `GeneratorSettingsTests`: 3 URL/timeout tests removed (now the client's responsibility, tested in `test_ollama_client.py`); the 2 remaining tests (model flows through, "Streaming from" log line) updated to mock `ollama.generate`
+- New `GeneratorOllamaClientTests` (3 tests) pin the new boundary: `generator` module imports `ollama` (not `requests`) and no longer exposes `_generate_ollama`
+- Legacy `test_generator.py` (4 tests) updated from `requests.post` mocks to `ollama.generate` mocks returning string tokens (the new client contract)
+- All 215 tests pass; ruff clean

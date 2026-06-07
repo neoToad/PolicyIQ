@@ -1,6 +1,5 @@
 from unittest import mock
 
-import requests
 from django.test import SimpleTestCase, override_settings
 
 from queries.exceptions import GenerationError
@@ -206,62 +205,40 @@ class BuildPromptTests(SimpleTestCase):
 
 
 class GenerateResponseTests(SimpleTestCase):
-    @mock.patch("queries.services.generator.requests.post")
-    def test_generate_response_yields_tokens_from_stream(self, mock_post):
-        mock_response = mock.Mock()
-        mock_response.iter_lines.return_value = [
-            b'{"response":"Hello"}',
-            b'{"response":" world"}',
-            b'{"response":"","done":true}',
-        ]
-        mock_response.raise_for_status = mock.Mock()
-        mock_post.return_value = mock_response
+    @mock.patch("queries.services.generator.ollama.generate")
+    def test_generate_response_yields_tokens_from_stream(self, mock_generate):
+        """The ollama backend yields tokens from the streaming generator."""
+        mock_generate.return_value = iter(["Hello", " world"])
 
         tokens = list(generate_response("test prompt"))
 
         self.assertEqual(tokens, ["Hello", " world"])
-        mock_post.assert_called_once()
-        call_kwargs = mock_post.call_args.kwargs
-        self.assertEqual(call_kwargs["json"]["model"], "llama3.2")
-        self.assertTrue(call_kwargs["json"]["stream"])
-        self.assertEqual(call_kwargs["stream"], True)
+        mock_generate.assert_called_once()
+        args, kwargs = mock_generate.call_args
+        self.assertEqual(args[0], "llama3.2")
+        self.assertEqual(args[1], "test prompt")
+        self.assertTrue(kwargs["stream"])
 
-    @mock.patch("queries.services.generator.time.sleep")
-    @mock.patch("queries.services.generator.requests.post")
-    def test_generate_response_retries_then_succeeds(self, mock_post, mock_sleep):
-        mock_response = mock.Mock()
-        mock_response.iter_lines.return_value = [b'{"response":"ok"}']
-        mock_response.raise_for_status = mock.Mock()
-        mock_post.side_effect = [
-            requests.RequestException("connection dropped"),
-            mock_response,
-        ]
+    @mock.patch("queries.services.generator.ollama.generate")
+    def test_generate_response_propagates_ollama_error(self, mock_generate):
+        """If the client raises OllamaError, generate_response raises GenerationError."""
+        from policyiq.ollama import OllamaError
 
-        tokens = list(generate_response("test prompt"))
-
-        self.assertEqual(tokens, ["ok"])
-        self.assertEqual(mock_post.call_count, 2)
-
-    @mock.patch("queries.services.generator.time.sleep")
-    @mock.patch("queries.services.generator.requests.post")
-    def test_generate_response_raises_clear_error_when_ollama_unreachable(self, mock_post, mock_sleep):
-        mock_post.side_effect = requests.RequestException("unreachable")
+        mock_generate.side_effect = OllamaError("unreachable")
 
         with self.assertRaisesRegex(GenerationError, "Ollama"):
             list(generate_response("test prompt"))
 
-        self.assertEqual(mock_post.call_count, 3)
-        self.assertEqual(mock_sleep.call_count, 2)
-
 
 class DispatchTests(SimpleTestCase):
-    @mock.patch("queries.services.generator._generate_ollama")
+    @mock.patch("queries.services.generator.ollama.generate")
     @override_settings(LLM_BACKEND="ollama")
-    def test_generate_response_dispatches_to_ollama_by_default(self, mock_ollama):
-        mock_ollama.return_value = iter(["token1", "token2"])
+    def test_generate_response_dispatches_to_ollama_by_default(self, mock_generate):
+        """Default backend is ollama; uses ollama.generate(stream=True)."""
+        mock_generate.return_value = iter(["token1", "token2"])
         tokens = list(generate_response("prompt"))
         self.assertEqual(tokens, ["token1", "token2"])
-        mock_ollama.assert_called_once_with("prompt")
+        mock_generate.assert_called_once_with("llama3.2", "prompt", stream=True)
 
     @mock.patch("queries.services.generator._generate_anthropic")
     @override_settings(LLM_BACKEND="anthropic")
@@ -321,36 +298,21 @@ class GeneratorSettingsTests(SimpleTestCase):
 
     After the audit H3 fix, the generator must read OLLAMA_GENERATE_MODEL,
     ANTHROPIC_MODEL, ANTHROPIC_MAX_TOKENS, and GENERATION_TIMEOUT from
-    settings — not from module-level constants.
+    settings — not from module-level constants. Phase 0.2d moves the
+    Ollama HTTP details to the client; the generator now only owns the
+    backend-dispatch and prompt-building logic.
     """
 
-    @mock.patch("queries.services.generator.requests.post")
-    def test_generate_ollama_uses_settings_model_name(self, mock_post):
-        """OLLAMA_GENERATE_MODEL flows into the request payload."""
-        mock_post.return_value = _mock_ollama_stream_response(["ok"])
-        # Patch _generate_ollama indirectly via requests.post since we can't
-        # access the private name now (still importable for tests though).
+    @mock.patch("queries.services.generator.ollama.generate")
+    def test_generate_ollama_uses_settings_model_name(self, mock_generate):
+        """OLLAMA_GENERATE_MODEL flows into the ollama.generate call."""
+        mock_generate.return_value = iter(["ok"])
         with override_settings(OLLAMA_GENERATE_MODEL="custom-gen-v3"):
             tokens = list(generate_response("test prompt"))
         self.assertEqual(tokens, ["ok"])
-        kwargs = mock_post.call_args.kwargs
-        self.assertEqual(kwargs["json"]["model"], "custom-gen-v3")
-
-    @mock.patch("queries.services.generator.requests.post")
-    def test_generate_ollama_uses_settings_base_url(self, mock_post):
-        """OLLAMA_BASE_URL flows into the generate URL."""
-        mock_post.return_value = _mock_ollama_stream_response(["ok"])
-        with override_settings(OLLAMA_BASE_URL="http://remote:9999"):
-            list(generate_response("test"))
-        self.assertEqual(mock_post.call_args.args[0], "http://remote:9999/api/generate")
-
-    @mock.patch("queries.services.generator.requests.post")
-    def test_generate_ollama_uses_settings_timeout(self, mock_post):
-        """GENERATION_TIMEOUT is used as the requests.post timeout."""
-        mock_post.return_value = _mock_ollama_stream_response(["ok"])
-        with override_settings(GENERATION_TIMEOUT=120):
-            list(generate_response("test"))
-        self.assertEqual(mock_post.call_args.kwargs["timeout"], 120)
+        args, kwargs = mock_generate.call_args
+        self.assertEqual(args[0], "custom-gen-v3")
+        self.assertTrue(kwargs["stream"])
 
     @override_settings(LLM_BACKEND="ollama")
     def test_generate_response_logs_settings_model_name(self):
@@ -358,10 +320,7 @@ class GeneratorSettingsTests(SimpleTestCase):
         with (
             override_settings(OLLAMA_GENERATE_MODEL="my-custom-model"),
             self.assertLogs("queries.generator", level="INFO") as cm,
-            mock.patch(
-                "queries.services.generator.requests.post",
-                return_value=_mock_ollama_stream_response(["ok"]),
-            ),
+            mock.patch("queries.services.generator.ollama.generate", return_value=iter(["ok"])),
         ):
             list(generate_response("test"))
         stream_lines = [line for line in cm.output if "Streaming from" in line]
@@ -386,6 +345,27 @@ class GeneratorSettingsTests(SimpleTestCase):
         call_kwargs = mock_client.messages.stream.call_args.kwargs
         self.assertEqual(call_kwargs["model"], "claude-haiku-3")
         self.assertEqual(call_kwargs["max_tokens"], 512)
+
+
+class GeneratorOllamaClientTests(SimpleTestCase):
+    """After Phase 0.2d, the generator must delegate to policyiq.ollama, not
+    talk to requests directly. These tests pin the new boundary."""
+
+    def test_generator_does_not_import_requests(self):
+        import queries.services.generator as gen_mod
+
+        self.assertFalse(hasattr(gen_mod, "requests"))
+
+    def test_generator_imports_ollama_client(self):
+        import queries.services.generator as gen_mod
+
+        self.assertTrue(hasattr(gen_mod, "ollama"))
+
+    def test_generator_does_not_expose_generate_ollama_helper(self):
+        """The private _generate_ollama helper is gone — its job is in the client."""
+        import queries.services.generator as gen_mod
+
+        self.assertFalse(hasattr(gen_mod, "_generate_ollama"))
 
 
 class GeneratorNoModuleConstantsTests(SimpleTestCase):

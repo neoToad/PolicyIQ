@@ -1,12 +1,19 @@
-import json
+"""Prompt building + backend dispatch for LLM text generation.
+
+Phase 0.2d: the Ollama HTTP/retry/envelope work lives in
+:mod:`policyiq.ollama`; this module just selects a backend, delegates
+to ``ollama.generate`` (or the Anthropic SDK), and reports token /
+timing metrics. The same retry policy is now shared with the embedder
+and the health probe.
+"""
+
 import logging
 import time
 from collections.abc import Iterator
 
-import requests
 from django.conf import settings
-from policyiq.llm_config import get_ollama_generate_url
 
+from policyiq import ollama
 from queries.exceptions import GenerationError
 
 try:
@@ -15,38 +22,6 @@ except ImportError:  # pragma: no cover
     anthropic = None  # type: ignore
 
 logger = logging.getLogger("queries.generator")
-
-
-def _generate_ollama(prompt: str) -> Iterator[str]:
-    url = get_ollama_generate_url()
-    timeout = settings.GENERATION_TIMEOUT
-    max_attempts = settings.EMBEDDING_RETRY_ATTEMPTS
-    delay = settings.EMBEDDING_RETRY_DELAY
-    payload = {"model": settings.OLLAMA_GENERATE_MODEL, "prompt": prompt, "stream": True}
-    last_error: Exception | None = None
-
-    for attempt in range(1, max_attempts + 1):
-        try:
-            response = requests.post(url, json=payload, stream=True, timeout=timeout)
-            response.raise_for_status()
-            for line in response.iter_lines():
-                if not line:
-                    continue
-                data = json.loads(line)
-                token = data.get("response", "")
-                if token:
-                    yield token
-            return
-        except (requests.RequestException, json.JSONDecodeError) as exc:
-            last_error = exc
-            logger.warning("Generation attempt %d/%d failed: %s", attempt, max_attempts, exc)
-            if attempt < max_attempts:
-                time.sleep(delay)
-
-    logger.error("Ollama generation service unreachable after %d attempts: %s", max_attempts, last_error)
-    raise GenerationError(
-        f"Ollama generation service is unreachable after {max_attempts} attempts at {url}."
-    ) from last_error
 
 
 def _generate_anthropic(prompt: str) -> Iterator[str]:
@@ -98,7 +73,7 @@ def generate_response(prompt: str) -> Iterator[str]:
     )
 
     if backend == "ollama":
-        gen = _generate_ollama(prompt)
+        gen = _ollama_token_stream(prompt)
     elif backend == "anthropic":
         gen = _generate_anthropic(prompt)
     else:
@@ -121,6 +96,20 @@ def generate_response(prompt: str) -> Iterator[str]:
         t_first_token if t_first_token is not None else 0.0,
         backend,
     )
+
+
+def _ollama_token_stream(prompt: str) -> Iterator[str]:
+    """Yield tokens from the shared ollama client's stream.
+
+    The client already pulls the ``response`` field out of each streamed
+    JSON line and yields plain strings, so this is a thin pass-through
+    that just maps :class:`OllamaError` to :class:`GenerationError` so
+    the view layer's error path stays uniform.
+    """
+    try:
+        yield from ollama.generate(settings.OLLAMA_GENERATE_MODEL, prompt, stream=True)
+    except ollama.OllamaError as exc:
+        raise GenerationError(f"Ollama generation service is unreachable: {exc}") from exc
 
 
 def build_prompt(question: str, chunks: list[dict], similarity_threshold: float | None = None) -> str | None:
