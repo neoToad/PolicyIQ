@@ -9,6 +9,19 @@ from queries.services.generator import _generate_anthropic, build_prompt, genera
 from queries.services.retriever import retrieve_chunks
 
 
+def _mock_ollama_stream_response(tokens: list[str]) -> mock.Mock:
+    """Build a mock requests.post() response that streams Ollama JSON lines."""
+    lines = []
+    for token in tokens:
+        lines.append(f'{{"response":"{token}"}}'.encode())
+    lines.append(b'{"response":"","done":true}')
+
+    mock_response = mock.Mock()
+    mock_response.iter_lines.return_value = lines
+    mock_response.raise_for_status = mock.Mock()
+    return mock_response
+
+
 class BuildCitationsTests(SimpleTestCase):
     def test_build_citations_maps_chunks_to_citation_dicts(self):
         chunks = [
@@ -228,10 +241,9 @@ class DispatchTests(SimpleTestCase):
 
 
 class AnthropicGenerationTests(SimpleTestCase):
-    @mock.patch("queries.services.generator.settings")
     @mock.patch("queries.services.generator.anthropic.Anthropic")
-    def test_generate_anthropic_yields_tokens_from_stream(self, mock_client_cls, mock_settings):
-        mock_settings.ANTHROPIC_API_KEY = "test-key"
+    @override_settings(ANTHROPIC_API_KEY="test-key")
+    def test_generate_anthropic_yields_tokens_from_stream(self, mock_client_cls):
         mock_stream = mock.Mock()
         mock_stream.__iter__ = mock.Mock(
             return_value=iter(
@@ -256,13 +268,119 @@ class AnthropicGenerationTests(SimpleTestCase):
         self.assertEqual(call_kwargs["max_tokens"], 1024)
         self.assertIn("test prompt", call_kwargs["messages"][0]["content"])
 
-    @mock.patch("queries.services.generator.settings")
     @mock.patch("queries.services.generator.anthropic.Anthropic")
-    def test_generate_anthropic_raises_clear_error_on_failure(self, mock_client_cls, mock_settings):
-        mock_settings.ANTHROPIC_API_KEY = "test-key"
+    @override_settings(ANTHROPIC_API_KEY="test-key")
+    def test_generate_anthropic_raises_clear_error_on_failure(self, mock_client_cls):
         mock_client = mock.Mock()
         mock_client.messages.stream.side_effect = Exception("API error")
         mock_client_cls.return_value = mock_client
 
         with self.assertRaisesRegex(GenerationError, "Anthropic"):
             list(_generate_anthropic("test prompt"))
+
+
+class GeneratorSettingsTests(SimpleTestCase):
+    """Settings-driven behavior of the generator (Phase 0.1d).
+
+    After the audit H3 fix, the generator must read OLLAMA_GENERATE_MODEL,
+    ANTHROPIC_MODEL, ANTHROPIC_MAX_TOKENS, and GENERATION_TIMEOUT from
+    settings — not from module-level constants.
+    """
+
+    @mock.patch("queries.services.generator.requests.post")
+    def test_generate_ollama_uses_settings_model_name(self, mock_post):
+        """OLLAMA_GENERATE_MODEL flows into the request payload."""
+        mock_post.return_value = _mock_ollama_stream_response(["ok"])
+        # Patch _generate_ollama indirectly via requests.post since we can't
+        # access the private name now (still importable for tests though).
+        with override_settings(OLLAMA_GENERATE_MODEL="custom-gen-v3"):
+            tokens = list(generate_response("test prompt"))
+        self.assertEqual(tokens, ["ok"])
+        kwargs = mock_post.call_args.kwargs
+        self.assertEqual(kwargs["json"]["model"], "custom-gen-v3")
+
+    @mock.patch("queries.services.generator.requests.post")
+    def test_generate_ollama_uses_settings_base_url(self, mock_post):
+        """OLLAMA_BASE_URL flows into the generate URL."""
+        mock_post.return_value = _mock_ollama_stream_response(["ok"])
+        with override_settings(OLLAMA_BASE_URL="http://remote:9999"):
+            list(generate_response("test"))
+        self.assertEqual(mock_post.call_args.args[0], "http://remote:9999/api/generate")
+
+    @mock.patch("queries.services.generator.requests.post")
+    def test_generate_ollama_uses_settings_timeout(self, mock_post):
+        """GENERATION_TIMEOUT is used as the requests.post timeout."""
+        mock_post.return_value = _mock_ollama_stream_response(["ok"])
+        with override_settings(GENERATION_TIMEOUT=120):
+            list(generate_response("test"))
+        self.assertEqual(mock_post.call_args.kwargs["timeout"], 120)
+
+    @override_settings(LLM_BACKEND="ollama")
+    def test_generate_response_logs_settings_model_name(self):
+        """The 'Streaming from' line reports the model from settings."""
+        with (
+            override_settings(OLLAMA_GENERATE_MODEL="my-custom-model"),
+            self.assertLogs("queries.generator", level="INFO") as cm,
+            mock.patch(
+                "queries.services.generator.requests.post",
+                return_value=_mock_ollama_stream_response(["ok"]),
+            ),
+        ):
+            list(generate_response("test"))
+        stream_lines = [line for line in cm.output if "Streaming from" in line]
+        self.assertEqual(len(stream_lines), 1)
+        self.assertIn("my-custom-model", stream_lines[0])
+
+    @mock.patch("queries.services.generator.anthropic.Anthropic")
+    def test_generate_anthropic_uses_settings_model_and_max_tokens(self, mock_client_cls):
+        """ANTHROPIC_MODEL + ANTHROPIC_MAX_TOKENS flow into the Anthropic call."""
+        mock_stream = mock.Mock()
+        mock_stream.__iter__ = mock.Mock(return_value=iter([]))
+        mock_client = mock.Mock()
+        mock_client.messages.stream.return_value.__enter__ = mock.Mock(return_value=mock_stream)
+        mock_client.messages.stream.return_value.__exit__ = mock.Mock(return_value=False)
+        mock_client_cls.return_value = mock_client
+
+        with (
+            override_settings(ANTHROPIC_API_KEY="test-key", ANTHROPIC_MODEL="claude-haiku-3", ANTHROPIC_MAX_TOKENS=512),
+        ):
+            list(_generate_anthropic("test"))
+
+        call_kwargs = mock_client.messages.stream.call_args.kwargs
+        self.assertEqual(call_kwargs["model"], "claude-haiku-3")
+        self.assertEqual(call_kwargs["max_tokens"], 512)
+
+
+class GeneratorNoModuleConstantsTests(SimpleTestCase):
+    """The generator must not expose hardcoded module-level constants for tunables.
+
+    The audit H3 finding flagged OLLAMA_GENERATE_URL, OLLAMA_GENERATE_MODEL,
+    ANTHROPIC_MODEL, ANTHROPIC_MAX_TOKENS, RETRY_ATTEMPTS, RETRY_DELAY_SECONDS
+    as hardcoded module-level constants. After Phase 0.1d, those names should
+    not exist on the module — they live in settings.
+    """
+
+    def test_module_has_no_hardcoded_ollama_generate_model(self):
+        import queries.services.generator as gen_mod
+
+        self.assertFalse(hasattr(gen_mod, "OLLAMA_GENERATE_MODEL"))
+
+    def test_module_has_no_hardcoded_ollama_generate_url(self):
+        import queries.services.generator as gen_mod
+
+        self.assertFalse(hasattr(gen_mod, "OLLAMA_GENERATE_URL"))
+
+    def test_module_has_no_hardcoded_anthropic_model(self):
+        import queries.services.generator as gen_mod
+
+        self.assertFalse(hasattr(gen_mod, "ANTHROPIC_MODEL"))
+
+    def test_module_has_no_hardcoded_anthropic_max_tokens(self):
+        import queries.services.generator as gen_mod
+
+        self.assertFalse(hasattr(gen_mod, "ANTHROPIC_MAX_TOKENS"))
+
+    def test_module_has_no_hardcoded_retry_attempts(self):
+        import queries.services.generator as gen_mod
+
+        self.assertFalse(hasattr(gen_mod, "RETRY_ATTEMPTS"))

@@ -618,3 +618,13 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - New `EmbedderSettingsTests` (6 tests): model, batch_size, base URL, query timeout, batch timeout, retry attempts — all use `override_settings` to prove tunables flow through
 - New `EmbedderNoModuleConstantsTests` (4 tests): guards the audit H3 fix by asserting the hardcoded constant names are gone
 - All 173 tests pass; ruff clean
+
+### [Phase0.1d] Refactor generator.py to use settings
+- Removed module-level constants `OLLAMA_GENERATE_URL`, `OLLAMA_GENERATE_MODEL`, `ANTHROPIC_MODEL`, `ANTHROPIC_MAX_TOKENS`, `RETRY_ATTEMPTS`, `RETRY_DELAY_SECONDS` from `queries/services/generator.py`
+- Replaced with `settings.OLLAMA_GENERATE_MODEL`, `settings.ANTHROPIC_MODEL`, `settings.ANTHROPIC_MAX_TOKENS`, `settings.EMBEDDING_RETRY_ATTEMPTS`, `settings.EMBEDDING_RETRY_DELAY`, `settings.GENERATION_TIMEOUT`
+- URL now comes from `policyiq.llm_config.get_ollama_generate_url()`
+- `build_prompt` now takes `similarity_threshold: float | None = None` (uses `settings.SIMILARITY_THRESHOLD` when None) — closes the duplicated `0.5` literal in views
+- Existing `AnthropicGenerationTests` updated from `mock.patch("settings")` to `@override_settings(ANTHROPIC_API_KEY=...)` — the refactored generator reads the real `settings` object, not a Mock
+- New `GeneratorSettingsTests` (5 tests): model name, base URL, timeout, log line reports model from settings, Anthropic model + max_tokens
+- New `GeneratorNoModuleConstantsTests` (5 tests): guards audit H3 fix by asserting the hardcoded constant names are gone
+- All 183 tests pass; ruff clean

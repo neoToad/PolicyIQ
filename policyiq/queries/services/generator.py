@@ -5,6 +5,7 @@ from collections.abc import Iterator
 
 import requests
 from django.conf import settings
+from policyiq.llm_config import get_ollama_generate_url
 
 from queries.exceptions import GenerationError
 
@@ -15,19 +16,18 @@ except ImportError:  # pragma: no cover
 
 logger = logging.getLogger("queries.generator")
 
-OLLAMA_GENERATE_URL = "http://localhost:11434/api/generate"
-OLLAMA_GENERATE_MODEL = "llama3.2"
-RETRY_ATTEMPTS = 3
-RETRY_DELAY_SECONDS = 1
-
 
 def _generate_ollama(prompt: str) -> Iterator[str]:
-    payload = {"model": OLLAMA_GENERATE_MODEL, "prompt": prompt, "stream": True}
+    url = get_ollama_generate_url()
+    timeout = settings.GENERATION_TIMEOUT
+    max_attempts = settings.EMBEDDING_RETRY_ATTEMPTS
+    delay = settings.EMBEDDING_RETRY_DELAY
+    payload = {"model": settings.OLLAMA_GENERATE_MODEL, "prompt": prompt, "stream": True}
     last_error: Exception | None = None
 
-    for attempt in range(1, RETRY_ATTEMPTS + 1):
+    for attempt in range(1, max_attempts + 1):
         try:
-            response = requests.post(OLLAMA_GENERATE_URL, json=payload, stream=True, timeout=60)
+            response = requests.post(url, json=payload, stream=True, timeout=timeout)
             response.raise_for_status()
             for line in response.iter_lines():
                 if not line:
@@ -39,18 +39,14 @@ def _generate_ollama(prompt: str) -> Iterator[str]:
             return
         except (requests.RequestException, json.JSONDecodeError) as exc:
             last_error = exc
-            logger.warning("Generation attempt %d/%d failed: %s", attempt, RETRY_ATTEMPTS, exc)
-            if attempt < RETRY_ATTEMPTS:
-                time.sleep(RETRY_DELAY_SECONDS)
+            logger.warning("Generation attempt %d/%d failed: %s", attempt, max_attempts, exc)
+            if attempt < max_attempts:
+                time.sleep(delay)
 
-    logger.error("Ollama generation service unreachable after %d attempts: %s", RETRY_ATTEMPTS, last_error)
+    logger.error("Ollama generation service unreachable after %d attempts: %s", max_attempts, last_error)
     raise GenerationError(
-        "Ollama generation service is unreachable after 3 attempts at http://localhost:11434/api/generate."
+        f"Ollama generation service is unreachable after {max_attempts} attempts at {url}."
     ) from last_error
-
-
-ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
-ANTHROPIC_MAX_TOKENS = 1024
 
 
 def _generate_anthropic(prompt: str) -> Iterator[str]:
@@ -63,8 +59,8 @@ def _generate_anthropic(prompt: str) -> Iterator[str]:
     client = anthropic.Anthropic(api_key=api_key)
     try:
         with client.messages.stream(
-            model=ANTHROPIC_MODEL,
-            max_tokens=ANTHROPIC_MAX_TOKENS,
+            model=settings.ANTHROPIC_MODEL,
+            max_tokens=settings.ANTHROPIC_MAX_TOKENS,
             messages=[{"role": "user", "content": prompt}],
         ) as stream:
             for event in stream:
@@ -93,7 +89,7 @@ def generate_response(prompt: str) -> Iterator[str]:
         GenerationError: If the chosen backend is unreachable or misconfigured.
     """
     backend = getattr(settings, "LLM_BACKEND", "ollama")
-    model_name = OLLAMA_GENERATE_MODEL if backend == "ollama" else ANTHROPIC_MODEL
+    model_name = settings.OLLAMA_GENERATE_MODEL if backend == "ollama" else settings.ANTHROPIC_MODEL
     logger.info(
         "Streaming from %s (model=%s, prompt=%d chars)",
         backend,
@@ -127,7 +123,7 @@ def generate_response(prompt: str) -> Iterator[str]:
     )
 
 
-def build_prompt(question: str, chunks: list[dict], similarity_threshold: float = 0.5) -> str | None:
+def build_prompt(question: str, chunks: list[dict], similarity_threshold: float | None = None) -> str | None:
     """Assemble a RAG prompt from retrieved chunks.
 
     Returns ``None`` when no chunk meets the similarity threshold, signalling
@@ -138,10 +134,14 @@ def build_prompt(question: str, chunks: list[dict], similarity_threshold: float 
         chunks: Retrieved chunks with ``text``, ``page_number``, ``document_name``,
             and ``similarity_score``.
         similarity_threshold: Minimum score required for any chunk to form a prompt.
+            Defaults to ``settings.SIMILARITY_THRESHOLD`` when None.
 
     Returns:
         A formatted prompt string, or ``None`` if relevance is too low.
     """
+    if similarity_threshold is None:
+        similarity_threshold = settings.SIMILARITY_THRESHOLD
+
     if not chunks:
         return None
     if max(c["similarity_score"] for c in chunks) < similarity_threshold:
