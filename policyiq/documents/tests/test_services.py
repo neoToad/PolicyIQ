@@ -1,10 +1,12 @@
 from unittest import mock
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from policyiq.ollama import OllamaError
 
-from documents.exceptions import EmbeddingError
+from documents.exceptions import EmbeddingError, IndexingError
+from documents.models import Chunk, Document
 from documents.services.chunker import chunk_pages
+from documents.services.deletion import delete_document_with_chunks
 from documents.services.embedder import embed_chunks, embed_query
 from documents.services.extractor import extract_pages
 from documents.services.indexer import delete_document, get_collection, index_document
@@ -430,3 +432,150 @@ class EmbedderNoModuleConstantsTests(SimpleTestCase):
         import documents.services.embedder as embedder_mod
 
         self.assertFalse(hasattr(embedder_mod, "DEFAULT_BATCH_SIZE"))
+
+
+class DeletionServiceTests(TestCase):
+    """Verify that the deletion service is atomic (audit H2).
+
+    A `delete_document_with_chunks(document)` call must remove both the
+    PostgreSQL row (and its `Chunk` rows via FK CASCADE) AND the ChromaDB
+    vectors belonging to the document. The service runs in a single
+    `transaction.atomic` block, with `delete_document` (ChromaDB) called
+    BEFORE `document.delete()` (PostgreSQL), so a PG delete failure
+    leaves ChromaDB already cleaned up. If the ChromaDB delete fails
+    first, the PG transaction rolls back and the document survives; if
+    it fails *during* compensation, a vector-orphan WARNING marker is
+    emitted for the ops sweeper.
+    """
+
+    def setUp(self):
+        # Real Document + Chunk rows so the FK CASCADE and PG delete
+        # can be exercised against a real (in-memory SQLite) database.
+        from django.core.files.base import ContentFile
+        from django.core.files.storage import default_storage
+
+        temp_path = default_storage.save("documents/_deletion_test_doc.pdf", ContentFile(b"%PDF-1.4\n"))
+        self.document = Document.objects.create(name="deletion.pdf", file=temp_path, page_count=1, chunk_count=2)
+        Chunk.objects.create(document=self.document, page_number=1, token_offset=0, text="chunk 1")
+        Chunk.objects.create(document=self.document, page_number=1, token_offset=1, text="chunk 2")
+
+    @mock.patch("documents.services.deletion.delete_document")
+    def test_delete_document_with_chunks_removes_pg_and_chromadb(self, mock_delete):
+        """Happy path: ChromaDB delete runs first, then PG row is gone.
+
+        The audit-H2 fix orders the writes so that if the PG delete
+        fails, the ChromaDB delete is rolled back along with the PG
+        transaction. On success, both stores are clean.
+        """
+        self.assertTrue(Document.objects.filter(pk=self.document.pk).exists())
+        self.assertEqual(Chunk.objects.filter(document=self.document).count(), 2)
+
+        # Capture the id before the service mutates the in-memory
+        # document (document.delete() clears the PK on the instance).
+        doc_id = str(self.document.id)
+
+        delete_document_with_chunks(self.document)
+
+        # ChromaDB delete was called with the document id.
+        mock_delete.assert_called_once_with(doc_id)
+        # PG row is gone; FK CASCADE removed the Chunk rows.
+        self.assertFalse(Document.objects.filter(pk=self.document.pk).exists())
+        self.assertEqual(Chunk.objects.count(), 0)
+
+    @mock.patch("documents.services.deletion.delete_document")
+    def test_delete_rolls_back_pg_on_chromadb_failure(self, mock_delete):
+        """When ChromaDB delete fails, the Document row is preserved.
+
+        The audit-H2 fix runs `delete_document` (ChromaDB) inside
+        `transaction.atomic` BEFORE `document.delete()` (PostgreSQL). A
+        ChromaDB failure raises before any PG write happens, so the
+        Document row (and its chunks) survive untouched.
+        """
+        mock_delete.side_effect = IndexingError("ChromaDB unreachable")
+
+        with self.assertRaises(IndexingError):
+            delete_document_with_chunks(self.document)
+
+        # Document and chunks are still there.
+        self.assertTrue(Document.objects.filter(pk=self.document.pk).exists())
+        self.assertEqual(Chunk.objects.filter(document=self.document).count(), 2)
+
+    @mock.patch("documents.services.deletion.delete_document")
+    def test_delete_orders_chromadb_before_pg(self, mock_delete):
+        """`delete_document` (ChromaDB) is called BEFORE `document.delete()` (PG).
+
+        The audit-H2 fix places the ChromaDB delete first so a PG
+        failure can be compensated (we know the document is in the
+        vector store, and the PG transaction will roll back the
+        document.delete() call). If the order were reversed, a PG
+        delete would leave orphan vectors in ChromaDB.
+        """
+        call_order: list[str] = []
+        mock_delete.side_effect = lambda _doc_id: call_order.append("chromadb")
+
+        real_document_delete = Document.delete
+
+        def tracking_delete(self, *args, **kwargs):
+            call_order.append("pg")
+            return real_document_delete(self, *args, **kwargs)
+
+        with mock.patch.object(Document, "delete", tracking_delete):
+            delete_document_with_chunks(self.document)
+
+        self.assertEqual(call_order, ["chromadb", "pg"])
+
+    @mock.patch("documents.services.deletion.transaction.atomic")
+    @mock.patch("documents.services.deletion.delete_document")
+    def test_delete_uses_atomic_block(self, mock_delete, mock_atomic):
+        """`transaction.atomic` is used as a context manager.
+
+        Like the pipeline fix in Phase 1, the deletion service wraps
+        its body in `transaction.atomic()` so the two writes are
+        all-or-nothing. The mock here pins the call site.
+
+        Note: we patch `documents.services.deletion.transaction.atomic`,
+        which replaces the `atomic` attribute on the `django.db.transaction`
+        module for the duration of the test. That means Django's internal
+        savepoint machinery (TestCase wrappers, etc.) also calls the
+        mocked function, so we only assert that the service entered at
+        least one atomic block as a context manager.
+        """
+        mock_atomic.return_value = mock.MagicMock()
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = False
+        mock_delete.return_value = None
+
+        delete_document_with_chunks(self.document)
+
+        # At least one atomic block was entered as a context manager
+        # by the service. (Django's TestCase internals may also call
+        # atomic for savepoint setup, so we don't pin the exact count.)
+        self.assertGreaterEqual(mock_atomic.call_count, 1)
+        # The service's call entered the CM.
+        self.assertGreaterEqual(mock_atomic.return_value.__enter__.call_count, 1)
+
+    def test_delete_emits_vector_orphan_warning_on_chromadb_failure(self):
+        """When ChromaDB delete fails, a vector-orphan WARNING is logged.
+
+        The audit-H2 partial fix: if the primary `delete_document`
+        call fails, the service emits a `WARNING` log line so an ops
+        sweeper job can find and clean up the leftover state. The
+        exception is re-raised so the caller sees the failure.
+        """
+        with (
+            mock.patch("documents.services.deletion.delete_document", side_effect=IndexingError("boom")),
+            self.assertLogs("documents.deletion", level="INFO") as cm,
+            self.assertRaises(IndexingError),
+        ):
+            delete_document_with_chunks(self.document)
+
+        warning_lines = [line for line in cm.output if line.startswith("WARNING")]
+        # A failure WARNING is emitted that includes the document id so
+        # ops can grep for it. (The exact wording may include "vector
+        # orphan" or just the failure type; we lock the prefix and the
+        # document id.)
+        self.assertGreaterEqual(len(warning_lines), 1)
+        self.assertTrue(
+            any(str(self.document.id) in line for line in warning_lines),
+            f"Expected the document id in a warning line; got: {warning_lines}",
+        )

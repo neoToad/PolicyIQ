@@ -239,9 +239,14 @@ class StaffDocumentDeleteViewTests(SimpleTestCase):
         user.is_staff = True
         return user
 
-    @mock.patch("documents.views.delete_document")
+    @mock.patch("documents.views.delete_document_with_chunks")
     @mock.patch("documents.views.Document.objects.get")
-    def test_staff_delete_removes_document_and_chromadb_chunks(self, mock_get, mock_delete_document):
+    def test_staff_delete_delegates_to_deletion_service(self, mock_get, mock_delete_service):
+        """The view now delegates to the shared `delete_document_with_chunks` service.
+
+        The view's only job is the 404 check; the atomic delete logic
+        lives in the service layer (audit H2, Phase 2.1).
+        """
         doc_id = uuid4()
         doc = mock.Mock()
         doc.id = doc_id
@@ -253,8 +258,7 @@ class StaffDocumentDeleteViewTests(SimpleTestCase):
         response = self.view(request, pk=str(doc_id))
 
         self.assertEqual(response.status_code, 200)
-        mock_delete_document.assert_called_once_with(str(doc_id))
-        doc.delete.assert_called_once()
+        mock_delete_service.assert_called_once_with(doc)
 
 
 class StaffDocumentReindexViewTests(SimpleTestCase):

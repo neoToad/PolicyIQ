@@ -18,6 +18,7 @@ from rest_framework.views import APIView
 
 from documents.models import Chunk, Document
 from documents.serializers import UploadResultSerializer
+from documents.services.deletion import delete_document_with_chunks
 from documents.services.indexer import delete_document
 from documents.services.pipeline import ingest_document
 from documents.services.stats import get_library_stats
@@ -206,8 +207,7 @@ class DocumentDeleteView(View):
         except Document.DoesNotExist:
             return HttpResponse(status=404)
 
-        delete_document(str(document.id))
-        document.delete()
+        delete_document_with_chunks(document)
         return HttpResponse(status=200)
 
 
@@ -232,8 +232,7 @@ class StaffDocumentDeleteView(View):
         except Document.DoesNotExist:
             return HttpResponse(status=404)
 
-        delete_document(str(document.id))
-        document.delete()
+        delete_document_with_chunks(document)
         return HttpResponse(status=200)
 
 
