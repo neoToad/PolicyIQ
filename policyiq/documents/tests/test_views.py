@@ -190,7 +190,7 @@ class StaffDocumentListViewTests(SimpleTestCase):
         user.is_staff = False
         return user
 
-    @mock.patch("documents.views.Document.objects.order_by")
+    @mock.patch("documents.views.upload.Document.objects.order_by")
     def test_staff_user_sees_document_list(self, mock_order_by):
         from datetime import datetime
 
@@ -239,8 +239,8 @@ class StaffDocumentDeleteViewTests(SimpleTestCase):
         user.is_staff = True
         return user
 
-    @mock.patch("documents.views.delete_document_with_chunks")
-    @mock.patch("documents.views.Document.objects.get")
+    @mock.patch("documents.views.upload.delete_document_with_chunks")
+    @mock.patch("documents.views.upload.Document.objects.get")
     def test_staff_delete_delegates_to_deletion_service(self, mock_get, mock_delete_service):
         """The view now delegates to the shared `delete_document_with_chunks` service.
 
@@ -272,10 +272,10 @@ class StaffDocumentReindexViewTests(SimpleTestCase):
         user.is_staff = True
         return user
 
-    @mock.patch("documents.views.ingest_document")
-    @mock.patch("documents.views.delete_document")
-    @mock.patch("documents.views.Chunk.objects.filter")
-    @mock.patch("documents.views.Document.objects.get")
+    @mock.patch("documents.views.upload.ingest_document")
+    @mock.patch("documents.views.upload.delete_document")
+    @mock.patch("documents.views.upload.Chunk.objects.filter")
+    @mock.patch("documents.views.upload.Document.objects.get")
     def test_staff_reindex_delegates_to_ingest_document(
         self,
         mock_get_document,
@@ -632,7 +632,7 @@ class DocumentUploadLoggingTests(TestCase):
 class HomePageViewTests(TestCase):
     """Tests for the public homepage (`GET /`)."""
 
-    @mock.patch("documents.views.get_library_stats")
+    @mock.patch("documents.views.upload.get_library_stats")
     def test_get_renders_home_template(self, mock_get_stats):
         """GET / returns 200, uses home.html, and contains the hero H1 text."""
         mock_get_stats.return_value = {
@@ -651,7 +651,7 @@ class HomePageViewTests(TestCase):
         # Hero tagline (per the spec).
         self.assertContains(response, "Ask plain-language questions about payer policy PDFs.")
 
-    @mock.patch("documents.views.get_library_stats")
+    @mock.patch("documents.views.upload.get_library_stats")
     def test_get_calls_stats_service(self, mock_get_stats):
         """The view must call get_library_stats() exactly once per request."""
         mock_get_stats.return_value = {
@@ -667,7 +667,7 @@ class HomePageViewTests(TestCase):
 
         mock_get_stats.assert_called_once_with()
 
-    @mock.patch("documents.views.get_library_stats")
+    @mock.patch("documents.views.upload.get_library_stats")
     def test_get_passes_stats_to_template(self, mock_get_stats):
         """The view passes the stats dict to the template so numbers render."""
         mock_get_stats.return_value = {

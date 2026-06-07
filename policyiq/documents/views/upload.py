@@ -1,7 +1,14 @@
+"""Document views: thin adapters over the service layer.
+
+Phase 3.4 collapsed the per-file upload loop into
+:func:`documents.views._uploads._process_uploads`. The two upload views
+(``UploadPageView`` and ``DocumentUploadAPIView``) now each call the
+helper and format the response.
+"""
+
 import logging
 
 from django.contrib.admin.views.decorators import staff_member_required
-from django.core.files.uploadedfile import UploadedFile
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils.decorators import method_decorator
@@ -16,30 +23,12 @@ from documents.models import Chunk, Document
 from documents.serializers import UploadResultSerializer
 from documents.services.deletion import delete_document_with_chunks
 from documents.services.indexer import delete_document
-from documents.services.pipeline import ingest_document, ingest_uploaded_pdf
+from documents.services.pipeline import ingest_document
 from documents.services.stats import get_library_stats
 from documents.throttles import UploadAnonRateThrottle, UploadUserRateThrottle
+from documents.views._uploads import _process_uploads
 
 logger = logging.getLogger("documents.views")
-
-
-def _validate_pdf(upload: UploadedFile) -> str | None:
-    """Validate that an uploaded file is a PDF.
-
-    Checks the Content-Type header and the PDF magic bytes (%PDF-) at the
-    start of the file content. Returns an error message if invalid, None if
-    the file passes validation.
-    """
-    content_type = getattr(upload, "content_type", "")
-    if content_type != "application/pdf":
-        return f"Invalid content type: {content_type or 'unknown'}. Only application/pdf is allowed."
-
-    header = upload.read(5)
-    upload.seek(0)
-    if header != b"%PDF-":
-        return "File does not appear to be a valid PDF (magic bytes mismatch)."
-
-    return None
 
 
 class HomePageView(View):
@@ -59,7 +48,7 @@ class UploadPageView(View):
         return render(request, "documents/upload.html")
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        """Handle multi-file upload, validate PDFs, and run ingestion pipeline."""
+        """Handle multi-file upload via the shared ``_process_uploads`` helper."""
         uploads = request.FILES.getlist("file")
         if not uploads:
             return render(
@@ -69,30 +58,8 @@ class UploadPageView(View):
                 status=400,
             )
 
-        results = []
-        for upload in uploads:
-            validation_error = _validate_pdf(upload)
-            if validation_error:
-                results.append(
-                    {"success": False, "name": upload.name, "error": validation_error, "reason": "validation"}
-                )
-                continue
-
-            try:
-                username = getattr(getattr(request, "user", None), "username", "anonymous")
-                document = ingest_uploaded_pdf(upload, username=username)
-                results.append({"success": True, "document": document})
-            except Exception as exc:
-                results.append({"success": False, "name": upload.name, "error": str(exc)})
-
-        has_success = any(r["success"] for r in results)
-        has_validation_error = any(r.get("reason") == "validation" for r in results)
-        if has_success:
-            status_code = 201
-        elif has_validation_error:
-            status_code = 400
-        else:
-            status_code = 500
+        username = getattr(getattr(request, "user", None), "username", "anonymous")
+        results, status_code = _process_uploads(uploads, username=username)
         return render(
             request,
             "documents/_upload_result.html",
@@ -162,7 +129,7 @@ class DocumentUploadAPIView(APIView):
     throttle_classes = [UploadAnonRateThrottle, UploadUserRateThrottle]
 
     def post(self, request: Request) -> Response:
-        """Validate and ingest uploaded PDFs, returning structured results."""
+        """Handle multi-file upload via the shared ``_process_uploads`` helper."""
         uploads = request.FILES.getlist("file")
         if not uploads:
             return Response(
@@ -170,39 +137,17 @@ class DocumentUploadAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        results = []
-        for upload in uploads:
-            validation_error = _validate_pdf(upload)
-            if validation_error:
-                results.append(
-                    {"success": False, "name": upload.name, "error": validation_error, "reason": "validation"}
-                )
-                continue
-
-            try:
-                username = getattr(getattr(request, "user", None), "username", "anonymous")
-                document = ingest_uploaded_pdf(upload, username=username)
-                results.append(
-                    {
-                        "success": True,
-                        "document_id": document.id,
-                        "name": document.name,
-                        "page_count": document.page_count,
-                        "chunk_count": document.chunk_count,
-                    }
-                )
-            except Exception as exc:
-                results.append({"success": False, "name": upload.name, "error": str(exc)})
+        username = getattr(getattr(request, "user", None), "username", "anonymous")
+        results, status_code = _process_uploads(uploads, username=username)
 
         serializer = UploadResultSerializer(data=results, many=True)
         serializer.is_valid(raise_exception=True)
 
-        has_success = any(r["success"] for r in results)
-        has_validation_error = any(r.get("reason") == "validation" for r in results)
-        if has_success:
-            status_code = status.HTTP_201_CREATED
-        elif has_validation_error:
-            status_code = status.HTTP_400_BAD_REQUEST
+        # Map the helper's plain int status to the DRF constants.
+        if status_code == 201:
+            drf_status = status.HTTP_201_CREATED
+        elif status_code == 400:
+            drf_status = status.HTTP_400_BAD_REQUEST
         else:
-            status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-        return Response({"results": serializer.data}, status=status_code)
+            drf_status = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return Response({"results": serializer.data}, status=drf_status)

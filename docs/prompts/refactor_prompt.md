@@ -60,15 +60,6 @@ The following four decisions have already been made by the user (see `docs/CURRE
 3. **Phase 5.2 — `StageTimer` / `timing.py`:** **Delete** `queries/services/timing.py` and `queries/tests/test_timing.py`. Add a `# TODO: shared stage timer` comment at each inline `t0 = time.monotonic()` block in the five services that have them.
 4. **Phase 4.9 — `test_views_pytest.py` consolidation:** **Keep `test_views_pytest.py`, drop `test_views.py`.** This is a user override of the default — the project is fully committing to pytest-style for view tests. The `conftest.py` fixtures stay.
 
----
-
-## Environment Assumptions
-
-- Python 3.11+
-- Repo root is the working directory; the Django project root is `policyiq/`
-- A virtualenv is active and `pip install -r policyiq/requirements.txt` has been run
-- Ollama running at `http://localhost:11434` with `nomic-embed-text` and `llama3.2` already pulled is **not** required — every new test mocks the LLM/embedding boundary
-- PostgreSQL is not required for these changes — all tests use the in-memory SQLite test DB
 
 ---
 

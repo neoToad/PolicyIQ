@@ -78,3 +78,12 @@ Per Locked Decision #1 (drop `DocumentDeleteView`, staff-only deletes):
 - 6 new tests in `documents.tests.test_pipeline.IngestUploadedPdfTests`: creates Document + delegates, deletes temp on success, rolls back on failure, writes full upload bytes, strips path components, `username` is keyword-only.
 - Existing view tests rewired to mock `documents.services.pipeline.ingest_document` and `documents.services.pipeline.default_storage` (the new home of the lifecycle).
 - 238 tests pass (232 baseline + 6 new); ruff clean.
+
+### [Phase3.4] Extract `_process_uploads` helper, collapse upload views to adapters
+- New `documents.views` package with `_uploads.py` (the per-file loop helper) and `upload.py` (the views).
+- New `documents.views._uploads._process_uploads(uploads, *, username)` is the shared per-file loop. It validates each upload, calls `ingest_uploaded_pdf`, and returns `(results, status_code)`. The status-code logic is preserved verbatim from the original (any success → 201, all-validation → 400, all-failure → 500).
+- `UploadPageView.post` and `DocumentUploadAPIView.post` each shrink to a 4-line adapter: extract files, call the helper, render the response.
+- The `documents/views.py` file became a `documents/views/` package. The `__init__.py` re-exports the view classes so `from documents.views import UploadPageView` still works.
+- 6 new tests in `documents.tests.test_uploads_helper.ProcessUploadsTests`: success dict, validation error → 400, pipeline failure → 500, mixed success+validation → 201, mixed success+pipeline-failure → 201, username forwarded.
+- Existing view tests rewired to mock `documents.views.upload.*` (the new home of the imports).
+- 244 tests pass (238 baseline + 6 new); ruff clean; pre-commit clean.

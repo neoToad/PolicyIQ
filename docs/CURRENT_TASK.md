@@ -1,6 +1,6 @@
 # Current Task
 
-**Phase 3 IN PROGRESS — view → service consolidation.**
+**Phase 3 IN PROGRESS — view → service consolidation. Sub-phases 3.1–3.4 done; verifying (3.5) next.**
 
 > **Note on changelog layout (2026-06-07):** The historical changelog was moved to `docs/changelogs/CHANGELOG.md`. The new top-level `docs/CHANGELOG.md` is the live file for Phase 2+ entries; it points to the archive in its header.
 
@@ -9,7 +9,11 @@
 - Phase 0 fully complete (settings + ollama_client + per-module migrations)
 - Phase 1 fully complete (pipeline atomicity + vector-orphan marker)
 - Phase 2 fully complete (deletion service + view consolidation)
-- Phase 3.1 starting now: extract `run_query` service, collapse `QueryAPIView` and `AskPageView` adapters
+- Phase 3.1 done: `run_query` service + view adapters
+- Phase 3.2 done: `safe_stream` sentinel for mid-stream LLM errors
+- Phase 3.3 done: `ingest_uploaded_pdf` service + view adapters
+- Phase 3.4 done: `_process_uploads` helper + `documents/views` package
+- Phase 3.5 next: verify Phase 3 (full test suite, ruff, pre-commit)
 - 4 user decisions locked in:
   1. **Phase 2.2**: Drop `DocumentDeleteView`, staff-only deletes (matches default)
   2. **Phase 5.1**: **KEEP both** (PG `Chunk` model + ChromaDB text) — user override from default; document the rationale in `CLAUDE.md`
