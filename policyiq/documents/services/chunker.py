@@ -2,12 +2,28 @@ import logging
 import time
 
 import tiktoken
+from django.conf import settings
 
 logger = logging.getLogger("documents.chunker")
 
 
-def chunk_pages(pages: list[dict], chunk_size: int = 500, overlap: int = 50) -> list[dict]:
-    """Create sliding token chunks where each next chunk starts `overlap` tokens before the prior one ends."""
+def chunk_pages(pages: list[dict], chunk_size: int | None = None, overlap: int | None = None) -> list[dict]:
+    """Create sliding token chunks where each next chunk starts `overlap` tokens before the prior one ends.
+
+    Args:
+        pages: List of page dicts with ``page_number`` and ``cleaned_text``.
+        chunk_size: Token count per chunk. Defaults to ``settings.CHUNK_SIZE``.
+        overlap: Token count that adjacent chunks share. Defaults to
+            ``settings.CHUNK_OVERLAP``.
+
+    Returns:
+        List of chunk dicts with ``text``, ``page_number``, and ``token_offset``.
+    """
+    if chunk_size is None:
+        chunk_size = settings.CHUNK_SIZE
+    if overlap is None:
+        overlap = settings.CHUNK_OVERLAP
+
     if chunk_size <= 0:
         raise ValueError("chunk_size must be greater than 0")
     if overlap < 0:

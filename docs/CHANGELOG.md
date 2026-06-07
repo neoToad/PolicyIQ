@@ -628,3 +628,8 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - New `GeneratorSettingsTests` (5 tests): model name, base URL, timeout, log line reports model from settings, Anthropic model + max_tokens
 - New `GeneratorNoModuleConstantsTests` (5 tests): guards audit H3 fix by asserting the hardcoded constant names are gone
 - All 183 tests pass; ruff clean
+
+### [Phase0.1e] Refactor chunker.py to use settings
+- `chunk_pages` now takes `chunk_size: int | None = None, overlap: int | None = None` (uses `settings.CHUNK_SIZE` / `settings.CHUNK_OVERLAP` when None)
+- New `policyiq/documents/tests/test_chunker.py` with 3 settings-driven tests: CHUNK_SIZE controls chunk size, CHUNK_OVERLAP controls overlap, signature has `None` defaults
+- All 186 tests pass; ruff clean
