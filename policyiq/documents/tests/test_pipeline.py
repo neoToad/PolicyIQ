@@ -1,32 +1,40 @@
-"""Tests for the `documents.pipeline` logger.
+"""Tests for the `documents.pipeline` logger and atomicity guarantees.
 
 The pipeline orchestrates extract → clean → chunk → embed → index. These
 tests verify that the pipeline emits a complete stage-level narrative on
-both success and failure, with timing on each stage and the exception type
-when a stage fails.
+both success and failure (with timing on each stage and the exception type
+when a stage fails), and that the pipeline is atomic — a failure in any
+stage rolls back the PostgreSQL state and compensates the ChromaDB vector
+store to avoid leaving orphan rows or vectors.
 """
 
 from unittest import mock
 
-from django.test import SimpleTestCase
+from django.db import IntegrityError
+from django.test import TestCase
 
 from documents.exceptions import ChunkingError, ExtractionError, IndexingError
+from documents.models import Chunk, Document
 from documents.services.pipeline import ingest_document
 
 
-def _make_document_mock(name: str = "policy.pdf") -> mock.Mock:
-    """Build a Document mock that supports the attributes ingest_document reads."""
-    doc = mock.Mock()
-    doc.id = "doc-123"
-    doc.name = name
-    doc.page_count = 0
-    doc.chunk_count = 0
-    doc.file = mock.Mock()
-    doc.file.path = "/tmp/policy.pdf"
-    return doc
+class PipelineLoggingTests(TestCase):
+    """Stage-level logging: each test patches the upstream services so the
+    pipeline runs end-to-end against a real (in-memory SQLite) database.
 
+    The pipeline wraps its body in `transaction.atomic()` after the
+    audit-H1 fix, so these tests use `TestCase` (real DB). The mocked
+    upstream services return deterministic data so no actual extraction,
+    embedding, or indexing work happens.
+    """
 
-class PipelineLoggingTests(SimpleTestCase):
+    def setUp(self):
+        self.document = _make_document_for_db("log.pdf", page_count=0, chunk_count=0)
+        self.extracted = [{"page_number": 1, "raw_text": "a"}]
+        self.cleaned = [{"page_number": 1, "cleaned_text": "a"}]
+        self.chunks = [{"text": "a", "page_number": 1, "token_offset": 0}]
+        self.embedded = [{"text": "a", "page_number": 1, "token_offset": 0, "embedding": [0.1]}]
+
     @mock.patch("documents.services.pipeline.index_document")
     @mock.patch("documents.services.pipeline.Chunk")
     @mock.patch("documents.services.pipeline.embed_chunks")
@@ -37,15 +45,14 @@ class PipelineLoggingTests(SimpleTestCase):
         self, mock_extract, mock_clean, mock_chunk, mock_embed, mock_chunk_model, mock_index
     ):
         """The 'Ingestion complete' line fires on success and includes a duration."""
-        mock_extract.return_value = [{"page_number": 1, "raw_text": "a"}]
-        mock_clean.return_value = [{"page_number": 1, "cleaned_text": "a"}]
-        mock_chunk.return_value = [{"text": "a", "page_number": 1, "token_offset": 0}]
-        mock_embed.return_value = [{"text": "a", "page_number": 1, "token_offset": 0, "embedding": [0.1]}]
+        mock_extract.return_value = self.extracted
+        mock_clean.return_value = self.cleaned
+        mock_chunk.return_value = self.chunks
+        mock_embed.return_value = self.embedded
         mock_index.return_value = 1
-        doc = _make_document_mock()
 
         with self.assertLogs("documents.pipeline", level="INFO") as cm:
-            ingest_document(doc)
+            ingest_document(self.document)
 
         completion_lines = [line for line in cm.output if "Ingestion complete" in line]
         self.assertEqual(len(completion_lines), 1)
@@ -56,28 +63,26 @@ class PipelineLoggingTests(SimpleTestCase):
     def test_pipeline_logs_failure_at_extractor_stage(self, mock_extract):
         """When extract_pages raises, the pipeline logs the failure with stage + type."""
         mock_extract.side_effect = ExtractionError("PDF corrupt")
-        doc = _make_document_mock("broken.pdf")
 
         with self.assertRaises(ExtractionError), self.assertLogs("documents.pipeline", level="INFO") as cm:
-            ingest_document(doc)
+            ingest_document(self.document)
 
         failure_lines = [line for line in cm.output if "Ingestion failed" in line and "stage=extract" in line]
         self.assertEqual(len(failure_lines), 1)
         self.assertIn("ExtractionError", failure_lines[0])
-        self.assertIn("broken.pdf", failure_lines[0])
+        self.assertIn("log.pdf", failure_lines[0])
 
     @mock.patch("documents.services.pipeline.chunk_pages")
     @mock.patch("documents.services.pipeline.clean_pages")
     @mock.patch("documents.services.pipeline.extract_pages")
     def test_pipeline_logs_failure_at_chunker_stage(self, mock_extract, mock_clean, mock_chunk):
         """When chunk_pages raises, the pipeline logs the failure with stage=chunk + type."""
-        mock_extract.return_value = [{"page_number": 1, "raw_text": "a"}]
-        mock_clean.return_value = [{"page_number": 1, "cleaned_text": "a"}]
+        mock_extract.return_value = self.extracted
+        mock_clean.return_value = self.cleaned
         mock_chunk.side_effect = ChunkingError("chunk failed")
-        doc = _make_document_mock("broken.pdf")
 
         with self.assertRaises(ChunkingError), self.assertLogs("documents.pipeline", level="INFO") as cm:
-            ingest_document(doc)
+            ingest_document(self.document)
 
         failure_lines = [line for line in cm.output if "Ingestion failed" in line and "stage=chunk" in line]
         self.assertEqual(len(failure_lines), 1)
@@ -93,15 +98,14 @@ class PipelineLoggingTests(SimpleTestCase):
         self, mock_extract, mock_clean, mock_chunk, mock_embed, mock_chunk_model, mock_index
     ):
         """When index_document raises, the pipeline logs the failure with stage=index + type."""
-        mock_extract.return_value = [{"page_number": 1, "raw_text": "a"}]
-        mock_clean.return_value = [{"page_number": 1, "cleaned_text": "a"}]
-        mock_chunk.return_value = [{"text": "a", "page_number": 1, "token_offset": 0}]
-        mock_embed.return_value = [{"text": "a", "page_number": 1, "token_offset": 0, "embedding": [0.1]}]
+        mock_extract.return_value = self.extracted
+        mock_clean.return_value = self.cleaned
+        mock_chunk.return_value = self.chunks
+        mock_embed.return_value = self.embedded
         mock_index.side_effect = IndexingError("ChromaDB write failed")
-        doc = _make_document_mock("broken.pdf")
 
         with self.assertRaises(IndexingError), self.assertLogs("documents.pipeline", level="INFO") as cm:
-            ingest_document(doc)
+            ingest_document(self.document)
 
         failure_lines = [line for line in cm.output if "Ingestion failed" in line and "stage=index" in line]
         self.assertEqual(len(failure_lines), 1)
@@ -117,17 +121,273 @@ class PipelineLoggingTests(SimpleTestCase):
         self, mock_extract, mock_clean, mock_chunk, mock_embed, mock_chunk_model, mock_index
     ):
         """The 'Starting ingestion' line fires on entry with the document id + name."""
-        mock_extract.return_value = [{"page_number": 1, "raw_text": "a"}]
-        mock_clean.return_value = [{"page_number": 1, "cleaned_text": "a"}]
-        mock_chunk.return_value = [{"text": "a", "page_number": 1, "token_offset": 0}]
-        mock_embed.return_value = [{"text": "a", "page_number": 1, "token_offset": 0, "embedding": [0.1]}]
+        mock_extract.return_value = self.extracted
+        mock_clean.return_value = self.cleaned
+        mock_chunk.return_value = self.chunks
+        mock_embed.return_value = self.embedded
         mock_index.return_value = 1
-        doc = _make_document_mock("policy.pdf")
 
         with self.assertLogs("documents.pipeline", level="INFO") as cm:
-            ingest_document(doc)
+            ingest_document(self.document)
 
         start_lines = [line for line in cm.output if "Starting ingestion" in line]
         self.assertEqual(len(start_lines), 1)
-        self.assertIn("doc-123", start_lines[0])
-        self.assertIn("policy.pdf", start_lines[0])
+        self.assertIn(str(self.document.id), start_lines[0])
+        self.assertIn("log.pdf", start_lines[0])
+
+
+def _make_document_for_db(name: str = "policy.pdf", page_count: int = 0, chunk_count: int = 0) -> Document:
+    """Create a real Document row in the test DB for the atomicity tests.
+
+    Bypasses the real file-field machinery by writing an empty tempfile via
+    default_storage so the FileField's path accessor works. The pipeline only
+    reads `document.file.path` and `document.id`; the file content is mocked
+    out in each test.
+    """
+    from django.core.files.base import ContentFile
+    from django.core.files.storage import default_storage
+
+    temp_path = default_storage.save(f"documents/_atomic_test_{name}", ContentFile(b"%PDF-1.4\n"))
+    return Document.objects.create(
+        name=name,
+        file=temp_path,
+        page_count=page_count,
+        chunk_count=chunk_count,
+    )
+
+
+class AtomicityTests(TestCase):
+    """Verify that the pipeline is atomic (audit H1).
+
+    A failure in any stage after a write must roll back the PostgreSQL state
+    and compensate the ChromaDB vector store so no orphan rows or vectors
+    remain. The pipeline's write order is also pinned: `index_document`
+    (ChromaDB) runs BEFORE `bulk_create` (PostgreSQL) so a bulk_create
+    failure can be compensated by deleting the just-written vectors.
+    """
+
+    def setUp(self):
+        self.document = _make_document_for_db("atomic.pdf", page_count=0, chunk_count=0)
+        # The successful-pipeline fixtures below are reused by most tests.
+        self.extracted = [{"page_number": 1, "raw_text": "a"}]
+        self.cleaned = [{"page_number": 1, "cleaned_text": "a"}]
+        self.chunks = [{"text": "a", "page_number": 1, "token_offset": 0}]
+        self.embedded = [{"text": "a", "page_number": 1, "token_offset": 0, "embedding": [0.1]}]
+
+    def _patch_happy_path(self, index_mock, bulk_create_mock):
+        """Wire the four upstream services + Chunk.bulk_create to succeed."""
+        index_mock.return_value = 1
+        bulk_create_mock.return_value = [mock.Mock()]
+        return (
+            mock.patch("documents.services.pipeline.extract_pages", return_value=self.extracted),
+            mock.patch("documents.services.pipeline.clean_pages", return_value=self.cleaned),
+            mock.patch("documents.services.pipeline.chunk_pages", return_value=self.chunks),
+            mock.patch("documents.services.pipeline.embed_chunks", return_value=self.embedded),
+        )
+
+    @mock.patch("documents.services.pipeline.index_document")
+    @mock.patch("documents.services.pipeline.Chunk.objects.bulk_create")
+    @mock.patch("documents.services.pipeline.embed_chunks")
+    @mock.patch("documents.services.pipeline.chunk_pages")
+    @mock.patch("documents.services.pipeline.clean_pages")
+    @mock.patch("documents.services.pipeline.extract_pages")
+    def test_pipeline_rolls_back_chunks_on_indexer_failure(
+        self,
+        mock_extract,
+        mock_clean,
+        mock_chunk,
+        mock_embed,
+        mock_bulk_create,
+        mock_index,
+    ):
+        """When `index_document` raises after `bulk_create` ran, no Chunk rows remain.
+
+        The pipeline runs `index_document` AFTER `bulk_create` in the old
+        order, so an indexer failure left orphan Chunk rows in PG. The
+        audit-H1 fix wraps the whole body in `transaction.atomic`, so the
+        bulk_create write is rolled back when the indexer raises.
+        """
+        mock_extract.return_value = self.extracted
+        mock_clean.return_value = self.cleaned
+        mock_chunk.return_value = self.chunks
+        mock_embed.return_value = self.embedded
+        mock_bulk_create.return_value = [mock.Mock()]
+        mock_index.side_effect = IndexingError("ChromaDB write failed")
+
+        with self.assertRaises(IndexingError):
+            ingest_document(self.document)
+
+        self.assertEqual(Chunk.objects.filter(document=self.document).count(), 0)
+        # The page_count/chunk_count save() inside the pipeline must also
+        # have been rolled back; the document is back to its pre-call value.
+        self.document.refresh_from_db()
+        self.assertEqual(self.document.page_count, 0)
+        self.assertEqual(self.document.chunk_count, 0)
+
+    @mock.patch("documents.services.pipeline.delete_document")
+    @mock.patch("documents.services.pipeline.index_document")
+    @mock.patch("documents.services.pipeline.Chunk.objects.bulk_create")
+    @mock.patch("documents.services.pipeline.embed_chunks")
+    @mock.patch("documents.services.pipeline.chunk_pages")
+    @mock.patch("documents.services.pipeline.clean_pages")
+    @mock.patch("documents.services.pipeline.extract_pages")
+    def test_pipeline_rolls_back_indexer_writes_on_bulk_create_failure(
+        self,
+        mock_extract,
+        mock_clean,
+        mock_chunk,
+        mock_embed,
+        mock_bulk_create,
+        mock_index,
+        mock_delete,
+    ):
+        """When `bulk_create` raises, the just-written vectors are compensated.
+
+        The audit-H1 fix reorders writes to `index_document` (ChromaDB)
+        BEFORE `bulk_create` (PostgreSQL). When the PG write fails, the
+        pipeline must explicitly delete the vectors it just wrote to avoid
+        leaving orphan embeddings that no longer have a corresponding
+        Chunk row.
+        """
+        mock_extract.return_value = self.extracted
+        mock_clean.return_value = self.cleaned
+        mock_chunk.return_value = self.chunks
+        mock_embed.return_value = self.embedded
+        mock_index.return_value = 1
+        mock_bulk_create.side_effect = IntegrityError("duplicate key")
+
+        with self.assertRaises(IntegrityError):
+            ingest_document(self.document)
+
+        # No Chunk rows from the failed run.
+        self.assertEqual(Chunk.objects.filter(document=self.document).count(), 0)
+        # Vector store was compensated: delete_document called with this doc's id.
+        mock_delete.assert_called_once_with(str(self.document.id))
+
+    @mock.patch("documents.services.pipeline.transaction.atomic")
+    @mock.patch("documents.services.pipeline.index_document")
+    @mock.patch("documents.services.pipeline.Chunk.objects.bulk_create")
+    @mock.patch("documents.services.pipeline.embed_chunks")
+    @mock.patch("documents.services.pipeline.chunk_pages")
+    @mock.patch("documents.services.pipeline.clean_pages")
+    @mock.patch("documents.services.pipeline.extract_pages")
+    def test_pipeline_uses_atomic_block(
+        self,
+        mock_extract,
+        mock_clean,
+        mock_chunk,
+        mock_embed,
+        mock_bulk_create,
+        mock_index,
+        mock_atomic,
+    ):
+        """`transaction.atomic` is entered as a context manager.
+
+        The audit-H1 fix wraps the whole pipeline body in a single
+        `transaction.atomic` block. The mock here proves the call site:
+        the pipeline uses `with transaction.atomic():` (i.e., it calls
+        the function to get a context manager), not the function itself.
+        """
+        # transaction.atomic(...) returns a context manager; the pipeline
+        # enters it with `with`. The mock's return value is itself a CM.
+        mock_atomic.return_value = mock.MagicMock()
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = False
+        mock_extract.return_value = self.extracted
+        mock_clean.return_value = self.cleaned
+        mock_chunk.return_value = self.chunks
+        mock_embed.return_value = self.embedded
+        mock_bulk_create.return_value = [mock.Mock()]
+        mock_index.return_value = 1
+
+        ingest_document(self.document)
+
+        # The pipeline entered exactly one atomic block.
+        self.assertEqual(mock_atomic.call_count, 1)
+        # ...and actually used it as a context manager.
+        mock_atomic.return_value.__enter__.assert_called_once()
+        mock_atomic.return_value.__exit__.assert_called_once()
+
+    def test_reindex_does_not_leave_orphan_chunks_on_failure(self):
+        """The staff reindex view must not leave orphan chunks when ingest fails.
+
+        The reindex path pre-deletes old chunks and then calls
+        `ingest_document`. If ingestion fails, the new atomic block rolls
+        back any PG writes the pipeline made, so the net result is zero
+        chunks for the document (the old ones are gone, the new ones
+        never persisted).
+
+        This test does NOT mock `ingest_document` — it lets the real
+        pipeline run with the upstream services (extract/clean/chunk/
+        embed) mocked. The `index_document` mock raises, exposing the
+        difference between the current code (orphan chunk remains) and
+        the fixed code (transaction rolled back, zero chunks).
+        """
+        from rest_framework.test import APIRequestFactory
+
+        from documents.views import StaffDocumentReindexView
+
+        # Seed a chunk so the pre-delete has something to remove.
+        Chunk.objects.create(
+            document=self.document,
+            page_number=1,
+            token_offset=0,
+            text="seed",
+        )
+        self.assertEqual(Chunk.objects.filter(document=self.document).count(), 1)
+
+        factory = APIRequestFactory()
+        view = StaffDocumentReindexView.as_view()
+        request = factory.post(f"/admin/documents/{self.document.id}/reindex/")
+        request.user = mock.Mock(is_authenticated=True, is_staff=True)
+
+        # Let the real ingest_document run; mock the upstream services
+        # to deterministic data, and make index_document raise so the
+        # post-pre-delete pipeline path is exercised.
+        with (
+            mock.patch("documents.services.pipeline.index_document", side_effect=IndexingError("boom")),
+            mock.patch("documents.services.pipeline.embed_chunks", return_value=self.embedded),
+            mock.patch("documents.services.pipeline.chunk_pages", return_value=self.chunks),
+            mock.patch("documents.services.pipeline.clean_pages", return_value=self.cleaned),
+            mock.patch("documents.services.pipeline.extract_pages", return_value=self.extracted),
+            self.assertRaises(IndexingError),
+        ):
+            view(request, pk=str(self.document.id))
+
+        # No orphan chunks: pre-delete cleared the seed, the rolled-back
+        # transaction cleared anything the pipeline would have written.
+        self.assertEqual(Chunk.objects.filter(document=self.document).count(), 0)
+
+    @mock.patch("documents.services.pipeline.index_document")
+    @mock.patch("documents.services.pipeline.Chunk.objects.bulk_create")
+    @mock.patch("documents.services.pipeline.embed_chunks")
+    @mock.patch("documents.services.pipeline.chunk_pages")
+    @mock.patch("documents.services.pipeline.clean_pages")
+    @mock.patch("documents.services.pipeline.extract_pages")
+    def test_pipeline_orders_bulk_create_after_indexer(
+        self,
+        mock_extract,
+        mock_clean,
+        mock_chunk,
+        mock_embed,
+        mock_bulk_create,
+        mock_index,
+    ):
+        """`bulk_create` is only attempted after `index_document` succeeds.
+
+        The audit-H1 fix reorders writes to `index_document` (ChromaDB)
+        before `bulk_create` (PostgreSQL). If `index_document` raises, no
+        PG write should have happened, and `bulk_create` must never have
+        been called.
+        """
+        mock_extract.return_value = self.extracted
+        mock_clean.return_value = self.cleaned
+        mock_chunk.return_value = self.chunks
+        mock_embed.return_value = self.embedded
+        mock_index.side_effect = IndexingError("ChromaDB write failed")
+
+        with self.assertRaises(IndexingError):
+            ingest_document(self.document)
+
+        mock_bulk_create.assert_not_called()
+        self.assertEqual(Chunk.objects.filter(document=self.document).count(), 0)
