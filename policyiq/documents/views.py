@@ -198,19 +198,6 @@ class HistoryPageView(View):
         return render(request, "documents/history.html", {"documents": documents})
 
 
-class DocumentDeleteView(View):
-    """Delete a document and its associated ChromaDB chunks."""
-
-    def delete(self, request: HttpRequest, pk: str) -> HttpResponse:
-        try:
-            document = Document.objects.get(pk=pk)
-        except Document.DoesNotExist:
-            return HttpResponse(status=404)
-
-        delete_document_with_chunks(document)
-        return HttpResponse(status=200)
-
-
 @method_decorator(staff_member_required, name="dispatch")
 class StaffDocumentListView(View):
     """Staff-only view listing all documents for administration."""

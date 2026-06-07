@@ -28,7 +28,7 @@
                 <button
                   class="btn"
                   style="background: #b91c1c;"
-                  hx-delete="{% url 'document-delete' document.id %}"
+                  hx-delete="{% url 'staff-document-delete' document.id %}"
                   hx-target="#doc-row-{{ document.id }}"
                   hx-swap="outerHTML swap:0.3s"
                   hx-confirm="Delete this document?"
