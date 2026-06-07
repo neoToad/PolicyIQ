@@ -1,11 +1,20 @@
-import logging
-import time
+"""Embedding service: turn text into normalized vectors via Ollama.
 
-import requests
+Phase 0.2c: this module no longer talks to ``requests`` directly — it
+delegates to :mod:`policyiq.ollama` which owns the retry loop, HTTP
+error wrapping, and 200-but-error envelope detection. The only thing
+left here is shape normalization, batching, and the ``embed_chunks`` /
+``embed_query`` public entry points.
+"""
+
+from __future__ import annotations
+
+import logging
+
 from django.conf import settings
-from policyiq.llm_config import get_ollama_embed_url
 
 from documents.exceptions import EmbeddingError
+from policyiq import ollama
 
 logger = logging.getLogger("documents.embedder")
 
@@ -13,14 +22,15 @@ logger = logging.getLogger("documents.embedder")
 def embed_chunks(chunks: list[dict], batch_size: int | None = None) -> list[dict]:
     """Embed each chunk's text using the configured embedding model.
 
-    Chunks are sent to Ollama in batches via the ``/api/embed`` endpoint,
-    which accepts a list of inputs and returns a list of embeddings. This
-    collapses N sequential HTTP calls into ``ceil(N / batch_size)`` calls,
-    which is meaningfully faster for large documents.
+    Chunks are sent to Ollama in batches via ``embed_texts``, which uses
+    the ``/api/embed`` endpoint and accepts a list of inputs. This collapses
+    N sequential HTTP calls into ``ceil(N / batch_size)`` calls, which is
+    meaningfully faster for large documents.
 
-    If a batch request fails, the function falls back to per-chunk sequential
-    calls (one ``/api/embed`` request per chunk) so a partial outage of
-    the batch endpoint does not block ingestion entirely.
+    If a batch call fails (the underlying :class:`policyiq.ollama.OllamaError`
+    bubbles up after the client's retries are exhausted), the function falls
+    back to per-chunk sequential calls (one ``/api/embed`` request per chunk)
+    so a partial outage of the batch endpoint does not block ingestion entirely.
 
     Returns the chunks with an additional ``embedding`` key containing
     the normalized vector.
@@ -36,92 +46,29 @@ def embed_chunks(chunks: list[dict], batch_size: int | None = None) -> list[dict
         batch = chunks[start : start + batch_size]
         texts = [c["text"] for c in batch]
         try:
-            vectors = _embed_batch_with_retry(texts)
-        except EmbeddingError as exc:
+            vectors = ollama.embed_texts(settings.OLLAMA_EMBED_MODEL, texts)
+        except ollama.OllamaError as exc:
             logger.warning("Batch embedding failed (%s); falling back to per-chunk sequential calls.", exc)
-            vectors = [_embed_single_with_retry(text) for text in texts]
+            try:
+                vectors = [ollama.embed_query(settings.OLLAMA_EMBED_MODEL, text) for text in texts]
+            except ollama.OllamaError as fallback_exc:
+                logger.error("Ollama embedding service unreachable: %s", fallback_exc)
+                raise EmbeddingError(f"Ollama embedding service is unreachable: {fallback_exc}") from fallback_exc
         for chunk, vector in zip(batch, vectors, strict=True):
-            embedded_chunks.append({**chunk, "embedding": vector})
+            embedded_chunks.append({**chunk, "embedding": _normalize(vector)})
     return embedded_chunks
 
 
 def embed_query(query: str) -> list[float]:
-    """Embed a user query so it can be used for vector search."""
-    return _embed_single_with_retry(query)
+    """Embed a user query so it can be used for vector search.
 
-
-def _embed_batch_with_retry(texts: list[str]) -> list[list[float]]:
-    """Send a batch of texts to ``/api/embed`` with retry/backoff.
-
-    Raises ``EmbeddingError`` if all retries fail.
+    Returns the L2-normalized embedding vector.
     """
-    url = get_ollama_embed_url()
-    timeout = settings.EMBEDDING_BATCH_TIMEOUT
-    max_attempts = settings.EMBEDDING_RETRY_ATTEMPTS
-    delay = settings.EMBEDDING_RETRY_DELAY
-    payload = {"model": settings.OLLAMA_EMBED_MODEL, "input": texts}
-    last_error: Exception | None = None
-
-    for attempt in range(1, max_attempts + 1):
-        try:
-            response = requests.post(url, json=payload, timeout=timeout)
-            response.raise_for_status()
-            data = response.json()
-            embeddings = data.get("embeddings")
-            if not isinstance(embeddings, list) or len(embeddings) != len(texts):
-                raise ValueError(
-                    f"Ollama /api/embed returned malformed 'embeddings' "
-                    f"(expected list of {len(texts)} vectors, got {type(embeddings).__name__})."
-                )
-            return [_normalize(vec) for vec in embeddings]
-        except (requests.RequestException, ValueError) as exc:
-            last_error = exc
-            logger.warning("Batch embedding attempt %d/%d failed: %s", attempt, max_attempts, exc)
-            if attempt < max_attempts:
-                time.sleep(delay)
-
-    logger.error(
-        "Ollama batch embedding service unreachable after %d attempts: %s",
-        max_attempts,
-        last_error,
-    )
-    raise EmbeddingError(
-        f"Ollama batch embedding service is unreachable after {max_attempts} attempts at {url}."
-    ) from last_error
-
-
-def _embed_single_with_retry(text: str) -> list[float]:
-    """Send a single text to ``/api/embed`` (as a one-element list) with retry/backoff.
-
-    Used for the single-query path (``embed_query``) and as the sequential
-    fallback when ``_embed_batch_with_retry`` exhausts its retries.
-    """
-    url = get_ollama_embed_url()
-    timeout = settings.EMBEDDING_QUERY_TIMEOUT
-    max_attempts = settings.EMBEDDING_RETRY_ATTEMPTS
-    delay = settings.EMBEDDING_RETRY_DELAY
-    payload = {"model": settings.OLLAMA_EMBED_MODEL, "input": text}
-    last_error: Exception | None = None
-
-    for attempt in range(1, max_attempts + 1):
-        try:
-            response = requests.post(url, json=payload, timeout=timeout)
-            response.raise_for_status()
-            data = response.json()
-            embeddings = data.get("embeddings")
-            if not isinstance(embeddings, list) or not embeddings:
-                raise ValueError("Ollama response missing 'embeddings' list.")
-            return _normalize(embeddings[0])
-        except (requests.RequestException, ValueError) as exc:
-            last_error = exc
-            logger.warning("Embedding attempt %d/%d failed: %s", attempt, max_attempts, exc)
-            if attempt < max_attempts:
-                time.sleep(delay)
-
-    logger.error("Ollama embedding service unreachable after %d attempts: %s", max_attempts, last_error)
-    raise EmbeddingError(
-        f"Ollama embedding service is unreachable after {max_attempts} attempts at {url}."
-    ) from last_error
+    try:
+        vector = ollama.embed_query(settings.OLLAMA_EMBED_MODEL, query)
+    except ollama.OllamaError as exc:
+        raise EmbeddingError(f"Ollama embedding service is unreachable: {exc}") from exc
+    return _normalize(vector)
 
 
 def _normalize(embedding: list[float]) -> list[float]:
@@ -129,7 +76,7 @@ def _normalize(embedding: list[float]) -> list[float]:
 
     nomic-embed-text via Ollama does not guarantee unit vectors, so we
     normalize here so ChromaDB's L2 distances map cleanly to cosine similarity.
-    Raises ``ValueError`` for a zero-length vector.
+    Raises :class:`ValueError` for a zero-length vector.
     """
     norm = sum(x * x for x in embedding) ** 0.5
     if norm == 0:

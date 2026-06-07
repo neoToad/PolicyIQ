@@ -668,3 +668,11 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - 22 new tests in `tests/test_ollama_client.py` covering: post_json success/retry/exhaustion/HTTP-error/envelope, post_stream success/blank-line-skip/midstream-disconnect/envelope, validate_embedding_vector accept/reject, is_error_envelope true/false, ping 200/connection-error/HTTP-error, and the four thin wrappers
 - All 216 tests pass; ruff clean
 - **Improvement beyond spec**: Wrapped the final `OllamaError` to include `last_exc` in the message — operators reading the health-check log can see the underlying transport error without digging into tracebacks
+
+### [Phase0.2c] Migrate embedder to use shared ollama client
+- `documents/services/embedder.py` no longer imports `requests` or owns a retry loop — it delegates to `policyiq.ollama.embed_texts` and `policyiq.ollama.embed_query`
+- The batch→fallback path still works the same way: a batch failure is caught and triggers per-chunk sequential calls; both are now backed by the shared client
+- 5 `EmbedderTests` rewritten to mock `documents.services.embedder.ollama.embed_texts` / `embed_query` instead of `requests.post`
+- 3 new `EmbedderOllamaClientTests` assert the embedder imports `ollama` (not `requests`) and that vectors are still L2-normalized after the client returns them
+- 5 weak `EmbedderSettingsTests` (URL/timeout/retry at the embedder layer) replaced with a single strong test asserting the client-layer `OllamaError` propagates as `EmbeddingError` — the URL/timeout/retry settings now live in the client module and are tested in `test_ollama_client.py` / `test_settings.py`
+- All 215 tests pass; ruff clean
