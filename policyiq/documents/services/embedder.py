@@ -2,19 +2,15 @@ import logging
 import time
 
 import requests
+from django.conf import settings
+from policyiq.llm_config import get_ollama_embed_url
 
 from documents.exceptions import EmbeddingError
 
 logger = logging.getLogger("documents.embedder")
 
-OLLAMA_EMBED_URL = "http://localhost:11434/api/embed"
-OLLAMA_EMBED_MODEL = "nomic-embed-text"
-RETRY_ATTEMPTS = 3
-RETRY_DELAY_SECONDS = 1
-DEFAULT_BATCH_SIZE = 32
 
-
-def embed_chunks(chunks: list[dict], batch_size: int = DEFAULT_BATCH_SIZE) -> list[dict]:
+def embed_chunks(chunks: list[dict], batch_size: int | None = None) -> list[dict]:
     """Embed each chunk's text using the configured embedding model.
 
     Chunks are sent to Ollama in batches via the ``/api/embed`` endpoint,
@@ -31,6 +27,9 @@ def embed_chunks(chunks: list[dict], batch_size: int = DEFAULT_BATCH_SIZE) -> li
     """
     if not chunks:
         return []
+
+    if batch_size is None:
+        batch_size = settings.EMBEDDING_BATCH_SIZE
 
     embedded_chunks: list[dict] = []
     for start in range(0, len(chunks), batch_size):
@@ -56,12 +55,16 @@ def _embed_batch_with_retry(texts: list[str]) -> list[list[float]]:
 
     Raises ``EmbeddingError`` if all retries fail.
     """
-    payload = {"model": OLLAMA_EMBED_MODEL, "input": texts}
+    url = get_ollama_embed_url()
+    timeout = settings.EMBEDDING_BATCH_TIMEOUT
+    max_attempts = settings.EMBEDDING_RETRY_ATTEMPTS
+    delay = settings.EMBEDDING_RETRY_DELAY
+    payload = {"model": settings.OLLAMA_EMBED_MODEL, "input": texts}
     last_error: Exception | None = None
 
-    for attempt in range(1, RETRY_ATTEMPTS + 1):
+    for attempt in range(1, max_attempts + 1):
         try:
-            response = requests.post(OLLAMA_EMBED_URL, json=payload, timeout=60)
+            response = requests.post(url, json=payload, timeout=timeout)
             response.raise_for_status()
             data = response.json()
             embeddings = data.get("embeddings")
@@ -73,17 +76,17 @@ def _embed_batch_with_retry(texts: list[str]) -> list[list[float]]:
             return [_normalize(vec) for vec in embeddings]
         except (requests.RequestException, ValueError) as exc:
             last_error = exc
-            logger.warning("Batch embedding attempt %d/%d failed: %s", attempt, RETRY_ATTEMPTS, exc)
-            if attempt < RETRY_ATTEMPTS:
-                time.sleep(RETRY_DELAY_SECONDS)
+            logger.warning("Batch embedding attempt %d/%d failed: %s", attempt, max_attempts, exc)
+            if attempt < max_attempts:
+                time.sleep(delay)
 
     logger.error(
         "Ollama batch embedding service unreachable after %d attempts: %s",
-        RETRY_ATTEMPTS,
+        max_attempts,
         last_error,
     )
     raise EmbeddingError(
-        f"Ollama batch embedding service is unreachable after {RETRY_ATTEMPTS} attempts at {OLLAMA_EMBED_URL}."
+        f"Ollama batch embedding service is unreachable after {max_attempts} attempts at {url}."
     ) from last_error
 
 
@@ -93,12 +96,16 @@ def _embed_single_with_retry(text: str) -> list[float]:
     Used for the single-query path (``embed_query``) and as the sequential
     fallback when ``_embed_batch_with_retry`` exhausts its retries.
     """
-    payload = {"model": OLLAMA_EMBED_MODEL, "input": text}
+    url = get_ollama_embed_url()
+    timeout = settings.EMBEDDING_QUERY_TIMEOUT
+    max_attempts = settings.EMBEDDING_RETRY_ATTEMPTS
+    delay = settings.EMBEDDING_RETRY_DELAY
+    payload = {"model": settings.OLLAMA_EMBED_MODEL, "input": text}
     last_error: Exception | None = None
 
-    for attempt in range(1, RETRY_ATTEMPTS + 1):
+    for attempt in range(1, max_attempts + 1):
         try:
-            response = requests.post(OLLAMA_EMBED_URL, json=payload, timeout=30)
+            response = requests.post(url, json=payload, timeout=timeout)
             response.raise_for_status()
             data = response.json()
             embeddings = data.get("embeddings")
@@ -107,13 +114,13 @@ def _embed_single_with_retry(text: str) -> list[float]:
             return _normalize(embeddings[0])
         except (requests.RequestException, ValueError) as exc:
             last_error = exc
-            logger.warning("Embedding attempt %d/%d failed: %s", attempt, RETRY_ATTEMPTS, exc)
-            if attempt < RETRY_ATTEMPTS:
-                time.sleep(RETRY_DELAY_SECONDS)
+            logger.warning("Embedding attempt %d/%d failed: %s", attempt, max_attempts, exc)
+            if attempt < max_attempts:
+                time.sleep(delay)
 
-    logger.error("Ollama embedding service unreachable after %d attempts: %s", RETRY_ATTEMPTS, last_error)
+    logger.error("Ollama embedding service unreachable after %d attempts: %s", max_attempts, last_error)
     raise EmbeddingError(
-        f"Ollama embedding service is unreachable after {RETRY_ATTEMPTS} attempts at {OLLAMA_EMBED_URL}."
+        f"Ollama embedding service is unreachable after {max_attempts} attempts at {url}."
     ) from last_error
 
 

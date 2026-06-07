@@ -1,7 +1,7 @@
 from unittest import mock
 
 import requests
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 
 from documents.exceptions import EmbeddingError
 from documents.services.chunker import chunk_pages
@@ -358,3 +358,132 @@ class IndexerLoggingTests(SimpleTestCase):
         error_lines = [line for line in cm.output if "Failed to index" in line and "doc-fail" in line]
         self.assertEqual(len(error_lines), 1)
         self.assertIn("RuntimeError", error_lines[0])
+
+
+class EmbedderSettingsTests(SimpleTestCase):
+    """Settings-driven behavior of the embedder (Phase 0.1c).
+
+    Verifies that the module reads from `settings` rather than hardcoded
+    module-level constants, so a future deploy can tune model/URL/timeout
+    via env-var without code changes.
+    """
+
+    @mock.patch("documents.services.embedder.requests.post")
+    def test_embed_chunks_uses_settings_model_name(self, mock_post):
+        """OLLAMA_EMBED_MODEL from settings flows into the request payload."""
+        mock_post.return_value = mock.Mock(
+            raise_for_status=mock.Mock(),
+            json=mock.Mock(return_value={"embeddings": [[1.0, 0.0]]}),
+        )
+        chunks = [{"text": "a", "page_number": 1, "token_offset": 0}]
+
+        with override_settings(OLLAMA_EMBED_MODEL="custom-embed-v2"):
+            embed_chunks(chunks)
+
+        kwargs = mock_post.call_args.kwargs
+        self.assertEqual(kwargs["json"]["model"], "custom-embed-v2")
+
+    @mock.patch("documents.services.embedder.requests.post")
+    def test_embed_chunks_uses_settings_batch_size(self, mock_post):
+        """EMBEDDING_BATCH_SIZE controls how many chunks go in a single request."""
+        # The mock returns one embedding per call (a single-element list).
+        mock_post.return_value = mock.Mock(
+            raise_for_status=mock.Mock(),
+            json=mock.Mock(return_value={"embeddings": [[1.0, 0.0]]}),
+        )
+        chunks = [
+            {"text": "a", "page_number": 1, "token_offset": 0},
+            {"text": "b", "page_number": 1, "token_offset": 10},
+            {"text": "c", "page_number": 1, "token_offset": 20},
+        ]
+
+        with override_settings(EMBEDDING_BATCH_SIZE=1):
+            embed_chunks(chunks)
+
+        # 3 chunks / batch_size 1 = 3 batches -> 3 requests
+        self.assertEqual(mock_post.call_count, 3)
+
+    @mock.patch("documents.services.embedder.requests.post")
+    def test_embed_chunks_uses_settings_base_url(self, mock_post):
+        """OLLAMA_BASE_URL flows into the embedder's request URL."""
+        mock_post.return_value = mock.Mock(
+            raise_for_status=mock.Mock(),
+            json=mock.Mock(return_value={"embeddings": [[1.0, 0.0]]}),
+        )
+        chunks = [{"text": "a", "page_number": 1, "token_offset": 0}]
+
+        with override_settings(OLLAMA_BASE_URL="http://remote-ollama:9999"):
+            embed_chunks(chunks)
+
+        self.assertEqual(mock_post.call_args.args[0], "http://remote-ollama:9999/api/embed")
+
+    @mock.patch("documents.services.embedder.requests.post")
+    def test_embed_query_uses_settings_query_timeout(self, mock_post):
+        """EMBEDDING_QUERY_TIMEOUT (default 30) is used for single-shot path."""
+        mock_post.return_value = mock.Mock(
+            raise_for_status=mock.Mock(),
+            json=mock.Mock(return_value={"embeddings": [[1.0]]}),
+        )
+
+        with override_settings(EMBEDDING_QUERY_TIMEOUT=15):
+            embed_query("test")
+
+        self.assertEqual(mock_post.call_args.kwargs["timeout"], 15)
+
+    @mock.patch("documents.services.embedder.requests.post")
+    def test_embed_chunks_uses_settings_batch_timeout(self, mock_post):
+        """EMBEDDING_BATCH_TIMEOUT (default 60) is used for the batched path."""
+        mock_post.return_value = mock.Mock(
+            raise_for_status=mock.Mock(),
+            json=mock.Mock(return_value={"embeddings": [[1.0, 0.0]]}),
+        )
+        chunks = [{"text": "a", "page_number": 1, "token_offset": 0}]
+
+        with override_settings(EMBEDDING_BATCH_TIMEOUT=120):
+            embed_chunks(chunks)
+
+        self.assertEqual(mock_post.call_args.kwargs["timeout"], 120)
+
+    @mock.patch("documents.services.embedder.requests.post")
+    @mock.patch("documents.services.embedder.time.sleep")
+    def test_embed_chunks_respects_retry_attempts_setting(self, mock_sleep, mock_post):
+        """EMBEDDING_RETRY_ATTEMPTS controls the retry budget (default 3)."""
+        mock_post.side_effect = requests.RequestException("unreachable")
+
+        with override_settings(EMBEDDING_RETRY_ATTEMPTS=2), self.assertRaises(EmbeddingError):
+            embed_chunks([{"text": "a", "page_number": 1, "token_offset": 0}])
+
+        # 2 attempts on the batched path then 2 attempts on the single-shot
+        # fallback = 2 + 2 = 4 calls. Sleep is called between attempts only
+        # (not after the last), so 1 + 1 = 2 sleeps.
+        self.assertEqual(mock_post.call_count, 4)
+        self.assertEqual(mock_sleep.call_count, 2)
+
+
+class EmbedderNoModuleConstantsTests(SimpleTestCase):
+    """The embedder must not expose hardcoded module-level constants for tunables.
+
+    The audit H3 finding flagged OLLAMA_EMBED_URL, OLLAMA_EMBED_MODEL, etc.
+    as hardcoded module-level constants. After Phase 0.1c, those names should
+    not exist on the module — they live in settings.
+    """
+
+    def test_module_has_no_hardcoded_model_constant(self):
+        import documents.services.embedder as embedder_mod
+
+        self.assertFalse(hasattr(embedder_mod, "OLLAMA_EMBED_MODEL"))
+
+    def test_module_has_no_hardcoded_url_constant(self):
+        import documents.services.embedder as embedder_mod
+
+        self.assertFalse(hasattr(embedder_mod, "OLLAMA_EMBED_URL"))
+
+    def test_module_has_no_hardcoded_retry_constant(self):
+        import documents.services.embedder as embedder_mod
+
+        self.assertFalse(hasattr(embedder_mod, "RETRY_ATTEMPTS"))
+
+    def test_module_has_no_hardcoded_batch_size_constant(self):
+        import documents.services.embedder as embedder_mod
+
+        self.assertFalse(hasattr(embedder_mod, "DEFAULT_BATCH_SIZE"))

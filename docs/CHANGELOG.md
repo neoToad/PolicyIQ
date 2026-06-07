@@ -609,3 +609,12 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - New `policyiq/tests/test_settings.py` with 20 tests (16 required-settings + 4 llm_config helper tests)
 - All 163 tests pass (143 baseline + 20 new); ruff clean
 - **Improvement beyond spec**: Added `get_ollama_tags_url()` helper alongside the embed/generate ones — the health check (Phase 0.2d) and the new client both need it; defining it once at Phase 0.1b avoids a follow-up edit later.
+
+### [Phase0.1c] Refactor embedder.py to use settings
+- Removed module-level constants `OLLAMA_EMBED_URL`, `OLLAMA_EMBED_MODEL`, `RETRY_ATTEMPTS`, `RETRY_DELAY_SECONDS`, `DEFAULT_BATCH_SIZE` from `documents/services/embedder.py`
+- Replaced with `settings.OLLAMA_EMBED_MODEL`, `settings.EMBEDDING_RETRY_ATTEMPTS`, `settings.EMBEDDING_RETRY_DELAY`, `settings.EMBEDDING_BATCH_SIZE`, `settings.EMBEDDING_BATCH_TIMEOUT`, `settings.EMBEDDING_QUERY_TIMEOUT`
+- URL now comes from `policyiq.llm_config.get_ollama_embed_url()` (derives from `settings.OLLAMA_BASE_URL`)
+- `embed_chunks` now takes `batch_size: int | None = None` (uses setting when None); explicit arg overrides setting for tests
+- New `EmbedderSettingsTests` (6 tests): model, batch_size, base URL, query timeout, batch timeout, retry attempts — all use `override_settings` to prove tunables flow through
+- New `EmbedderNoModuleConstantsTests` (4 tests): guards the audit H3 fix by asserting the hardcoded constant names are gone
+- All 173 tests pass; ruff clean
