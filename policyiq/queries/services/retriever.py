@@ -1,6 +1,7 @@
 import logging
 import time
 
+from django.conf import settings
 from documents.services.embedder import embed_query
 from documents.services.indexer import get_collection
 
@@ -24,7 +25,7 @@ def _truncate_for_log(text: str, max_chars: int = MAX_QUESTION_LOG_CHARS) -> str
     return text[:max_chars] + "..."
 
 
-def retrieve_chunks(query: str, document_id: str | None = None, top_k: int = 5) -> list[dict]:
+def retrieve_chunks(query: str, document_id: str | None = None, top_k: int | None = None) -> list[dict]:
     """Retrieve the most semantically similar chunks for a query.
 
     Embeds the query, queries ChromaDB, and converts squared L2 distances
@@ -35,11 +36,15 @@ def retrieve_chunks(query: str, document_id: str | None = None, top_k: int = 5) 
     Args:
         query: The user's question.
         document_id: Optional UUID to restrict search to a single document.
-        top_k: Maximum number of chunks to return.
+        top_k: Maximum number of chunks to return. Defaults to
+            ``settings.RETRIEVAL_TOP_K`` when None.
 
     Returns:
         Chunks sorted by descending similarity score.
     """
+    if top_k is None:
+        top_k = settings.RETRIEVAL_TOP_K
+
     safe_q = _truncate_for_log(query)
     logger.info(
         "Retrieving up to %d chunks for question=%r document_id=%s",

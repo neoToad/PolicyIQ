@@ -136,6 +136,43 @@ class RetrieveChunksTests(SimpleTestCase):
         self.assertEqual(result, [])
 
 
+class RetrieverSettingsTests(SimpleTestCase):
+    """Settings-driven behavior of the retriever (Phase 0.1f).
+
+    The retriever's ``top_k`` parameter must default to
+    ``settings.RETRIEVAL_TOP_K`` (default 5), so ops can tune retrieval
+    depth via env-var.
+    """
+
+    @mock.patch("queries.services.retriever.get_collection")
+    @mock.patch("queries.services.retriever.embed_query")
+    def test_retrieve_chunks_uses_settings_top_k_when_unspecified(self, mock_embed_query, mock_get_collection):
+        mock_embed_query.return_value = [0.1, 0.2, 0.3]
+        mock_collection = mock.Mock()
+        mock_collection.query.return_value = {
+            "ids": [[]],
+            "documents": [[]],
+            "metadatas": [[]],
+            "distances": [[]],
+        }
+        mock_get_collection.return_value = mock_collection
+
+        with override_settings(RETRIEVAL_TOP_K=12):
+            retrieve_chunks("test question")
+
+        # n_results should be 12 from settings, not the old default of 5
+        self.assertEqual(mock_collection.query.call_args.kwargs["n_results"], 12)
+
+    def test_retriever_signature_top_k_defaults_to_none(self):
+        """Audit H3 — top_k must default to None (i.e., 'use setting')."""
+        import inspect
+
+        import queries.services.retriever as ret_mod
+
+        sig = inspect.signature(ret_mod.retrieve_chunks)
+        self.assertIsNone(sig.parameters["top_k"].default)
+
+
 class BuildPromptTests(SimpleTestCase):
     def test_build_prompt_returns_none_when_no_chunk_meets_threshold(self):
         chunks = [{"text": "low relevance", "page_number": 1, "document_name": "A.pdf", "similarity_score": 0.3}]

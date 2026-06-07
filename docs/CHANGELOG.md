@@ -633,3 +633,8 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - `chunk_pages` now takes `chunk_size: int | None = None, overlap: int | None = None` (uses `settings.CHUNK_SIZE` / `settings.CHUNK_OVERLAP` when None)
 - New `policyiq/documents/tests/test_chunker.py` with 3 settings-driven tests: CHUNK_SIZE controls chunk size, CHUNK_OVERLAP controls overlap, signature has `None` defaults
 - All 186 tests pass; ruff clean
+
+### [Phase0.1f] Refactor retriever.py to use settings
+- `retrieve_chunks` now takes `top_k: int | None = None` (uses `settings.RETRIEVAL_TOP_K` when None)
+- New `RetrieverSettingsTests` (2 tests) prove the setting flows into `n_results` of the ChromaDB query and the signature default is None
+- All 188 tests pass; ruff clean
