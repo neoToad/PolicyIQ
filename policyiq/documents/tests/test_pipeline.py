@@ -391,3 +391,49 @@ class AtomicityTests(TestCase):
 
         mock_bulk_create.assert_not_called()
         self.assertEqual(Chunk.objects.filter(document=self.document).count(), 0)
+
+    @mock.patch("documents.services.pipeline.delete_document")
+    @mock.patch("documents.services.pipeline.index_document")
+    @mock.patch("documents.services.pipeline.Chunk.objects.bulk_create")
+    @mock.patch("documents.services.pipeline.embed_chunks")
+    @mock.patch("documents.services.pipeline.chunk_pages")
+    @mock.patch("documents.services.pipeline.clean_pages")
+    @mock.patch("documents.services.pipeline.extract_pages")
+    def test_vector_orphan_warning_fires_when_compensation_fails(
+        self,
+        mock_extract,
+        mock_clean,
+        mock_chunk,
+        mock_embed,
+        mock_bulk_create,
+        mock_index,
+        mock_delete,
+    ):
+        """When `bulk_create` fails and compensation fails, a vector-orphan warning is logged.
+
+        The audit-H2 partial fix: if the compensation `delete_document`
+        call also raises, the pipeline emits a `WARNING` log line that an
+        ops sweeper job can grep for. The line includes `document_id`
+        and `chunk_count` so a follow-up sweeper can find and clean up
+        the leftover vectors. The pipeline still re-raises the original
+        `IntegrityError` so the caller sees the failure.
+        """
+        mock_extract.return_value = self.extracted
+        mock_clean.return_value = self.cleaned
+        mock_chunk.return_value = self.chunks
+        mock_embed.return_value = self.embedded
+        mock_index.return_value = 1
+        mock_bulk_create.side_effect = IntegrityError("duplicate key")
+        mock_delete.side_effect = IndexingError("compensation also failed")
+
+        with self.assertRaises(IntegrityError), self.assertLogs("documents.pipeline", level="INFO") as cm:
+            ingest_document(self.document)
+
+        # The orphan warning fires with a stable prefix ops can grep for.
+        orphan_lines = [
+            line for line in cm.output if "vector_orphan" in line.lower() or "vector orphan" in line.lower()
+        ]
+        self.assertEqual(len(orphan_lines), 1)
+        # Includes document_id and chunk_count so a sweeper can act on it.
+        self.assertIn(str(self.document.id), orphan_lines[0])
+        self.assertIn("1", orphan_lines[0])  # chunk_count = 1 embedded chunk
