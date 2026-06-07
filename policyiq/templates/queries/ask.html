@@ -38,6 +38,13 @@
 
 {% block extra_body %}
 <script>
+  // Thresholds injected from settings via policyiq.context_processors.similarity_thresholds.
+  // Mirrors the server-side gate in build_prompt (SIMILARITY_THRESHOLD) and the
+  // high-bar colour-band boundary (SIMILARITY_BAR_HIGH) so a single env-var
+  // change retunes both layers in lockstep.
+  var SIMILARITY_BAR_HIGH = {{ SIMILARITY_BAR_HIGH }};
+  var SIMILARITY_THRESHOLD = {{ SIMILARITY_THRESHOLD }};
+
   document.addEventListener('htmx:afterRequest', function (evt) {
     var target = evt.detail.target;
     if (!target || target.id !== 'answer') return;
@@ -66,7 +73,7 @@
     citations.forEach(function (c) {
       var score = c.similarity_score || 0;
       var scorePct = Math.round(score * 100);
-      var barColor = score > 0.75 ? '#15803d' : (score >= 0.5 ? '#a16207' : '#b91c1c');
+      var barColor = score > SIMILARITY_BAR_HIGH ? '#15803d' : (score >= SIMILARITY_THRESHOLD ? '#a16207' : '#b91c1c');
       html += '<div style="margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border);">';
       html += '<p style="margin: 0 0 4px 0; font-weight: 600;">' + escapeHtml(c.document_name || 'Unknown') + ' – page ' + (c.page_number || '?') + '</p>';
       html += '<p style="margin: 0 0 4px 0; font-size: 0.85rem; color: var(--text-secondary);">';

@@ -646,3 +646,12 @@ Closes the audit findings in [`docs/REFACTOR_AUDIT.md`](./REFACTOR_AUDIT.md) (8 
 - Updated `test_views.py` and `test_views_pytest.py` to assert against `settings.RETRIEVAL_TOP_K` and the new `build_prompt` call shape
 - **Improvement beyond spec**: Dropped the hardcoded `0.5` in both view call sites so a single env-var change (`SIMILARITY_THRESHOLD`) flows into the view layer without code changes; previously the view hardcoded 0.5 even though the generator had a default
 - All 188 tests pass; ruff clean
+
+### [Phase0.1h] Inject similarity thresholds into ask.html via context processor
+- New `policyiq/context_processors.py::similarity_thresholds` reads `settings.SIMILARITY_THRESHOLD` and `settings.SIMILARITY_BAR_HIGH` at render time and injects them as JS variables at the top of the script block in `templates/queries/ask.html`
+- The citations panel colouring in `ask.html:69` now reads from those JS variables instead of hardcoded `0.75` and `0.5` — a single env-var change retunes both the server-side gate and the UI bar in lockstep (audit L13)
+- Wired into `TEMPLATES.OPTIONS.context_processors` in `settings.py`
+- 6 new tests in `tests/test_settings.py`:
+  - `SimilarityContextProcessorTests` (3) — direct call, override_settings, and that the processor is listed in `Engine.get_default().context_processors`
+  - `AskTemplateThresholdInjectionTests` (3) — render the template and assert: default render has no `> 0.75` literal, override of `SIMILARITY_BAR_HIGH=0.81` produces `0.81` not `0.75`, override of `SIMILARITY_THRESHOLD=0.42` produces `0.42` not `0.5`
+- All 194 tests pass; ruff clean
