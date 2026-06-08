@@ -7,6 +7,7 @@ from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 
+from documents.exceptions import ChunkingError, EmbeddingError, ExtractionError, IndexingError
 from documents.models import Chunk, Document
 from documents.services.chunker import chunk_pages
 from documents.services.embedder import embed_chunks
@@ -235,11 +236,21 @@ def ingest_document(document, file_path: str | None = None) -> dict:
                 "embedded_chunks": embedded_chunks,
             }
     except Exception as exc:
-        # Identify the stage from the exception's class. The pipeline catches
-        # all exceptions and re-raises; the class name maps cleanly to the
-        # stage that produced it for known DocumentError subtypes.
+        # Identify the stage from the exception's class. Using isinstance
+        # (audit L2) is more robust than the previous string-name lookup —
+        # a renamed exception class would silently fall through to the
+        # "unknown" default under the old dict.
         elapsed = time.monotonic() - t_start
-        stage = _STAGE_BY_EXCEPTION_NAME.get(type(exc).__name__, "unknown")
+        if isinstance(exc, ExtractionError):
+            stage = "extract"
+        elif isinstance(exc, ChunkingError):
+            stage = "chunk"
+        elif isinstance(exc, EmbeddingError):
+            stage = "embed"
+        elif isinstance(exc, IndexingError):
+            stage = "index"
+        else:
+            stage = "unknown"
         logger.info(
             "Ingestion failed for %s at stage=%s after %.2fs: %s",
             document.name,
@@ -248,11 +259,3 @@ def ingest_document(document, file_path: str | None = None) -> dict:
             type(exc).__name__,
         )
         raise
-
-
-_STAGE_BY_EXCEPTION_NAME: dict[str, str] = {
-    "ExtractionError": "extract",
-    "ChunkingError": "chunk",
-    "EmbeddingError": "embed",
-    "IndexingError": "index",
-}
