@@ -178,3 +178,60 @@ class SafeStreamTests(SimpleTestCase):
         # At least one ERROR line mentions the message.
         error_lines = [line for line in cm.output if "connection reset" in line]
         self.assertEqual(len(error_lines), 1)
+
+
+class MidStreamConnectionDropTests(SimpleTestCase):
+    """Audit M10: cover the streaming Ollama generator's mid-stream drop.
+
+    The ``ollama.post_stream`` helper raises :class:`OllamaError` when
+    ``response.iter_lines()`` raises ``ChunkedEncodingError``. That
+    surfaces through ``_ollama_token_stream`` as a :class:`GenerationError`,
+    which ``safe_stream`` (3.2) catches and converts to a sentinel marker.
+    The test below walks the full path so a regression in any of the
+    three layers is caught.
+    """
+
+    @override_settings(LLM_BACKEND="ollama")
+    @mock.patch("queries.services.generator.ollama.generate")
+    def test_generate_response_raises_generation_error_when_ollama_drops_mid_stream(
+        self, mock_generate,
+    ):
+        """Ollama streams 2 tokens, then the connection drops (simulated by
+        the underlying ``ollama.generate`` raising ``OllamaError``). The
+        public ``generate_response`` should propagate a
+        :class:`GenerationError` to its caller (which is the safe_stream
+        wrapper, which converts to a sentinel)."""
+        from policyiq.ollama import OllamaError
+
+        def dropping_iter():
+            yield "Hello"
+            yield " there"
+            raise OllamaError("Ollama stream disconnected mid-response: chunked encoding broke")
+
+        mock_generate.return_value = dropping_iter()
+
+        with self.assertRaises(GenerationError):
+            # Drain the generator to force the mid-stream raise.
+            list(generate_response("test prompt"))
+
+    def test_safe_stream_converts_mid_stream_disconnect_to_sentinel(self):
+        """End-to-end: when the underlying ollama stream raises mid-way
+        (simulated here as a generator that yields 2 tokens then raises
+        :class:`GenerationError`), ``safe_stream`` yields the 2 tokens
+        followed by an ``<!-- error: ... -->`` sentinel. The user sees a
+        complete page with a clear "stream interrupted" indicator instead
+        of a truncated response (audit H6 + M10 contract)."""
+
+        def dropping_gen():
+            yield "Partial"
+            yield " answer"
+            raise GenerationError("Ollama stream disconnected mid-response")
+
+        result = list(safe_stream(dropping_gen()))
+
+        # The two delivered tokens come through first.
+        self.assertEqual(result[:2], ["Partial", " answer"])
+        # Then exactly one error sentinel that mentions the cause.
+        sentinels = [r for r in result[2:] if r.startswith("<!-- error:")]
+        self.assertEqual(len(sentinels), 1)
+        self.assertIn("Ollama stream disconnected mid-response", sentinels[0])
