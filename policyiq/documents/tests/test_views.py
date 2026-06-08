@@ -828,3 +828,88 @@ class HomePageViewTests(TestCase):
         self.assertContains(response, "42")  # chunks count
         self.assertContains(response, "17")  # pages count
         self.assertIn("stats", response.context)
+
+
+class HistoryPageViewTests(TestCase):
+    """Audit M10: cover `HistoryPageView` rendering, ordering, and XSS-safety.
+
+    Pre-Phase-4 the view had zero tests. A regression that broke the
+    ordering, lost the template context, or stripped the `|escape`
+    filter on the filename would not be caught without these.
+    """
+
+    def setUp(self):
+        from documents.views import HistoryPageView
+
+        self.factory = RequestFactory()
+        self.view = HistoryPageView.as_view()
+
+    def test_empty_db_renders_no_rows(self):
+        """With no documents, the page renders 200 and the empty-state copy."""
+        response = self.view(self.factory.get("/history/"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No documents uploaded yet.")
+        # The view must not render any document rows when the table is empty.
+        self.assertNotContains(response, "<tr id=\"doc-row-")
+
+    def test_two_docs_rendered_in_reverse_chronological_order(self):
+        """Newer document appears first; older document appears second."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from documents.models import Document
+
+        # Use timezone-aware datetimes so auto_now_add's UTC compare is sane.
+        now = timezone.now()
+        older = Document.objects.create(
+            name="older.pdf",
+            file=SimpleUploadedFile("older.pdf", b"%PDF-older"),
+            page_count=1,
+            chunk_count=1,
+        )
+        # Override the auto_now_add to control ordering.
+        Document.objects.filter(pk=older.pk).update(uploaded_at=now - timedelta(days=1))
+
+        newer = Document.objects.create(
+            name="newer.pdf",
+            file=SimpleUploadedFile("newer.pdf", b"%PDF-newer"),
+            page_count=2,
+            chunk_count=2,
+        )
+        Document.objects.filter(pk=newer.pk).update(uploaded_at=now)
+
+        response = self.view(self.factory.get("/history/"))
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        newer_pos = body.find("newer.pdf")
+        older_pos = body.find("older.pdf")
+        self.assertNotEqual(newer_pos, -1)
+        self.assertNotEqual(older_pos, -1)
+        # The view orders by `-uploaded_at`, so the newer doc comes first.
+        self.assertLess(newer_pos, older_pos)
+
+    def test_special_character_filename_does_not_inject_html(self):
+        """Audit M10: `Aetna&2026.pdf` renders as `Aetna&amp;2026.pdf`, not
+        as raw `&`. Django's auto-escape handles the `&` in the template;
+        the test is the regression guard."""
+        from documents.models import Document
+
+        Document.objects.create(
+            name="Aetna&2026.pdf",
+            file=SimpleUploadedFile("Aetna&2026.pdf", b"%PDF-xss"),
+            page_count=1,
+            chunk_count=1,
+        )
+
+        response = self.view(self.factory.get("/history/"))
+
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode()
+        # The escaped form must be present.
+        self.assertIn("Aetna&amp;2026.pdf", body)
+        # The raw, un-escaped form must NOT be present (would render as
+        # an HTML entity or — worse — as the start of an injected tag).
+        self.assertNotIn("Aetna&2026.pdf", body.replace("Aetna&amp;2026.pdf", ""))
