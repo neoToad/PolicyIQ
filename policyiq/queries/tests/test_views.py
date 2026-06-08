@@ -241,6 +241,53 @@ class QueryAPIViewTests(SimpleTestCase):
         self.assertEqual(parsed[0]["page_number"], 3)
         self.assertEqual(parsed[0]["similarity_score"], 0.92)
 
+    @mock.patch("queries.services.query_pipeline.generate_response")
+    @mock.patch("queries.services.query_pipeline.retrieve_chunks", return_value=[])
+    def test_returns_200_with_no_information_when_chroma_empty(
+        self, mock_retrieve, mock_generate
+    ):
+        """Audit H8: ChromaDB returns no chunks → 200 with the canned
+        'no relevant information' answer, NO X-Citations header, and
+        ``generate_response`` is never called (no LLM cost on empty
+        retrieval)."""
+        request = self.factory.post("/api/queries/", {"question": "Is it covered?"})
+        force_authenticate(request, user=self.user)
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["answer"], "No relevant information found in the uploaded documents.")
+        self.assertNotIn("X-Citations", response)
+        mock_generate.assert_not_called()
+
+    @mock.patch("queries.services.query_pipeline.generate_response")
+    @mock.patch(
+        "queries.services.query_pipeline.retrieve_chunks",
+        return_value=[
+            {
+                "text": "Not very relevant.",
+                "page_number": 1,
+                "document_id": "d-1",
+                "document_name": "Policy.pdf",
+                "similarity_score": 0.3,
+            }
+        ],
+    )
+    def test_returns_200_with_no_information_when_chunks_below_threshold(
+        self, mock_retrieve, mock_generate
+    ):
+        """Audit H8: chunks exist but the top similarity (0.3) is below
+        ``settings.SIMILARITY_THRESHOLD`` (default 0.5) → 200 with the
+        canned answer, NO X-Citations header, ``generate_response`` not
+        called."""
+        request = self.factory.post("/api/queries/", {"question": "Is it covered?"})
+        force_authenticate(request, user=self.user)
+        response = self.view(request)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["answer"], "No relevant information found in the uploaded documents.")
+        self.assertNotIn("X-Citations", response)
+        mock_generate.assert_not_called()
+
 
 class HealthCheckAPIViewTests(SimpleTestCase):
     def setUp(self):
