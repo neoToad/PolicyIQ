@@ -260,6 +260,66 @@ class StaffDocumentDeleteViewTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         mock_delete_service.assert_called_once_with(doc)
 
+    def test_non_staff_user_is_redirected_to_login(self):
+        """Audit M7: the staff-only delete view must redirect non-staff to
+        the login page (302). After the Phase 2.2 consolidation, this is
+        the only delete entry point — anonymous and non-staff users must
+        not be able to call it."""
+        doc_id = uuid4()
+        user = mock.Mock()
+        user.is_authenticated = True
+        user.is_staff = False
+        request = self.factory.delete("/admin/documents/" + str(doc_id) + "/delete/")
+        request.user = user
+        response = self.view(request, pk=str(doc_id))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response.url)
+
+    def test_anonymous_user_is_redirected_to_login(self):
+        """Audit M7: unauthenticated callers are also redirected to login."""
+        doc_id = uuid4()
+        user = mock.Mock()
+        user.is_authenticated = False
+        user.is_staff = False
+        request = self.factory.delete("/admin/documents/" + str(doc_id) + "/delete/")
+        request.user = user
+        response = self.view(request, pk=str(doc_id))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("login", response.url)
+
+    @mock.patch("documents.views.upload.delete_document_with_chunks")
+    @mock.patch("documents.views.upload.Document.objects.get")
+    def test_delete_returns_200_on_success(self, mock_get, mock_delete_service):
+        """Audit M7 (contract): a successful delete returns 200 OK so the
+        HTMX client can refresh the page (it expects 2xx, not 204)."""
+        doc_id = uuid4()
+        doc = mock.Mock(id=doc_id, name="gone.pdf")
+        mock_get.return_value = doc
+
+        request = self.factory.delete("/admin/documents/" + str(doc_id) + "/delete/")
+        request.user = self._staff_user()
+        response = self.view(request, pk=str(doc_id))
+
+        self.assertEqual(response.status_code, 200)
+        mock_delete_service.assert_called_once_with(doc)
+
+    @mock.patch("documents.views.upload.Document.objects.get")
+    def test_delete_returns_404_when_document_missing(self, mock_get):
+        """Missing document → 404 (not 500), so the UI can render a
+        useful 'not found' state."""
+        from documents.models import Document
+
+        mock_get.side_effect = Document.DoesNotExist()
+
+        doc_id = uuid4()
+        request = self.factory.delete("/admin/documents/" + str(doc_id) + "/delete/")
+        request.user = self._staff_user()
+        response = self.view(request, pk=str(doc_id))
+
+        self.assertEqual(response.status_code, 404)
+
 
 class StaffDocumentReindexViewTests(SimpleTestCase):
     def setUp(self):
