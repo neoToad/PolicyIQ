@@ -863,7 +863,9 @@ class UploadPartialFailureTests(IsolatedMediaRootMixin, TestCase):
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_two_files_one_success_one_pipeline_failure_returns_201(
-        self, mock_storage, mock_ingest,
+        self,
+        mock_storage,
+        mock_ingest,
     ):
         """Audit M11: mixed success + pipeline-failure → 201 (any success wins).
         The response body is ``{"results": [..., ...]}`` with one success
@@ -901,7 +903,9 @@ class UploadPartialFailureTests(IsolatedMediaRootMixin, TestCase):
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_two_files_one_success_one_validation_failure_returns_201(
-        self, mock_storage, mock_ingest,
+        self,
+        mock_storage,
+        mock_ingest,
     ):
         """Audit M11: mixed success + validation-failure → 201 (any success wins).
         The validation-failure result carries ``reason="validation"`` so the
@@ -939,9 +943,7 @@ class UploadPartialFailureTests(IsolatedMediaRootMixin, TestCase):
         mock_storage.path.return_value = "/tmp/media/documents/_tmp_broken.pdf"
         mock_ingest.side_effect = ValueError("PDF is corrupt")
 
-        response = self._post_files(
-            [SimpleUploadedFile("broken.pdf", b"%PDF-broken", content_type="application/pdf")]
-        )
+        response = self._post_files([SimpleUploadedFile("broken.pdf", b"%PDF-broken", content_type="application/pdf")])
 
         self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
         self.assertEqual(len(response.data["results"]), 1)
@@ -950,9 +952,7 @@ class UploadPartialFailureTests(IsolatedMediaRootMixin, TestCase):
 
     def test_one_file_validation_failure_returns_400(self):
         """Audit M11: single non-PDF file → 400 with a validation reason."""
-        response = self._post_files(
-            [SimpleUploadedFile("notes.txt", b"not a pdf", content_type="text/plain")]
-        )
+        response = self._post_files([SimpleUploadedFile("notes.txt", b"not a pdf", content_type="text/plain")])
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(len(response.data["results"]), 1)
@@ -991,7 +991,7 @@ class HistoryPageViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "No documents uploaded yet.")
         # The view must not render any document rows when the table is empty.
-        self.assertNotContains(response, "<tr id=\"doc-row-")
+        self.assertNotContains(response, '<tr id="doc-row-')
 
     def test_two_docs_rendered_in_reverse_chronological_order(self):
         """Newer document appears first; older document appears second."""

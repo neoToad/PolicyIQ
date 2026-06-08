@@ -19,7 +19,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from documents.exceptions import ChunkingError, ExtractionError, IndexingError
 from documents.models import Chunk, Document

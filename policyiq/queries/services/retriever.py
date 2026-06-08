@@ -4,6 +4,7 @@ import time
 from django.conf import settings
 from documents.services.embedder import embed_query
 from documents.services.indexer import get_collection
+
 from queries.constants import MAX_CHUNKS_IN_LOG, MAX_QUESTION_LOG_CHARS
 
 logger = logging.getLogger("queries.retriever")

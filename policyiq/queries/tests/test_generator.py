@@ -194,7 +194,8 @@ class MidStreamConnectionDropTests(SimpleTestCase):
     @override_settings(LLM_BACKEND="ollama")
     @mock.patch("queries.services.generator.ollama.generate")
     def test_generate_response_raises_generation_error_when_ollama_drops_mid_stream(
-        self, mock_generate,
+        self,
+        mock_generate,
     ):
         """Ollama streams 2 tokens, then the connection drops (simulated by
         the underlying ``ollama.generate`` raising ``OllamaError``). The
