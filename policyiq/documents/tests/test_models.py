@@ -4,6 +4,7 @@ import fitz
 from django.contrib import admin
 from django.test import SimpleTestCase
 
+from documents.exceptions import ExtractionError
 from documents.models import Chunk, Document
 from documents.services.extractor import clean_pages, extract_pages
 
@@ -32,17 +33,20 @@ class ExtractPagesTests(SimpleTestCase):
         mock_open.assert_called_once_with("fake.pdf")
 
     @mock.patch("documents.services.extractor.fitz.open")
-    def test_extract_pages_raises_file_not_found_for_missing_pdf(self, mock_open):
+    def test_extract_pages_raises_extraction_error_for_missing_pdf(self, mock_open):
+        """Audit M13/L19: missing file is wrapped in ExtractionError so the
+        pipeline's isinstance ladder can map the stage cleanly."""
         mock_open.side_effect = FileNotFoundError
 
-        with self.assertRaises(FileNotFoundError):
+        with self.assertRaises(ExtractionError):
             extract_pages("missing.pdf")
 
     @mock.patch("documents.services.extractor.fitz.open")
-    def test_extract_pages_raises_value_error_for_corrupted_pdf(self, mock_open):
+    def test_extract_pages_raises_extraction_error_for_corrupted_pdf(self, mock_open):
+        """Audit M13/L19: fitz.FileDataError is wrapped in ExtractionError."""
         mock_open.side_effect = fitz.FileDataError("cannot open broken document")
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ExtractionError):
             extract_pages("corrupted.pdf")
 
 

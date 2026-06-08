@@ -34,4 +34,3 @@ Do **not** drop the `text` column from `Chunk` or move it to a
 secondary table without revisiting this decision and the
 `delete_document_with_chunks` ordering in
 `documents/services/deletion.py`.
-

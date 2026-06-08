@@ -11,10 +11,10 @@ from unittest import mock
 from uuid import uuid4
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from documents.tests._isolation import IsolatedMediaRootMixin
-from documents.views._uploads import _process_uploads
+from documents.views._uploads import _process_uploads, _validate_pdf
 
 
 def _pdf_upload(name: str = "policy.pdf") -> SimpleUploadedFile:
@@ -149,3 +149,36 @@ class ProcessUploadsTests(IsolatedMediaRootMixin, TestCase):
 
         mock_ingest.assert_called_once()
         self.assertEqual(mock_ingest.call_args.kwargs["username"], "bob")
+
+
+class ValidatePdfSizeTests(TestCase):
+    """Audit M3: ``_validate_pdf`` rejects uploads over ``PDF_MAX_BYTES``.
+
+    A 500 MB upload shouldn't be streamed to disk and then fail at the
+    embedder — the size cap rejects at the boundary.
+    """
+
+    def test_validate_pdf_returns_none_for_valid_size(self):
+        """A small PDF under the cap returns None (valid)."""
+        upload = _pdf_upload()
+        self.assertIsNone(_validate_pdf(upload))
+
+    @override_settings(PDF_MAX_BYTES=1024)
+    def test_validate_pdf_returns_error_when_too_large(self):
+        """An upload above ``PDF_MAX_BYTES`` returns an error mentioning the cap."""
+        big_content = b"%PDF-1.4 " + b"x" * 2048
+        upload = SimpleUploadedFile("big.pdf", big_content, content_type="application/pdf")
+        error = _validate_pdf(upload)
+        self.assertIsNotNone(error)
+        self.assertIn("too large", error.lower())
+
+    @override_settings(PDF_MAX_BYTES=1024)
+    def test_validate_pdf_size_check_runs_before_magic_bytes(self):
+        """An oversize file with a valid magic header is still rejected.
+
+        Pin ordering so the size cap is the first line of defense — the
+        magic-bytes check is a fallback for content-type spoofing.
+        """
+        big_content = b"%PDF-1.4 " + b"x" * 2048
+        upload = SimpleUploadedFile("big.pdf", big_content, content_type="application/pdf")
+        self.assertIsNotNone(_validate_pdf(upload))

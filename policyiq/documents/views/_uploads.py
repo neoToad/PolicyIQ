@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
+from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
 
 from documents.services.pipeline import ingest_uploaded_pdf
@@ -32,14 +33,24 @@ STATUS_INTERNAL_ERROR = 500
 
 
 def _validate_pdf(upload: UploadedFile) -> str | None:
-    """Validate that an uploaded file is a PDF.
+    """Validate that an uploaded file is a PDF within the size cap.
 
     Returns an error message string on failure, ``None`` on success.
     Moved from the view module so the per-file loop can own it.
+
+    The size check uses ``settings.PDF_MAX_BYTES`` (default 50 MiB, audit
+    M3) so a malicious or accidentally-large upload is rejected at the
+    boundary before any disk write or extractor call happens.
     """
     content_type = getattr(upload, "content_type", "")
     if content_type != "application/pdf":
         return f"Invalid content type: {content_type or 'unknown'}. Only application/pdf is allowed."
+
+    size = getattr(upload, "size", 0) or 0
+    if size > settings.PDF_MAX_BYTES:
+        max_mb = settings.PDF_MAX_BYTES / (1024 * 1024)
+        actual_mb = size / (1024 * 1024)
+        return f"File too large: {actual_mb:.1f} MB exceeds the {max_mb:.0f} MB limit. Please upload a smaller PDF."
 
     header = upload.read(5)
     upload.seek(0)

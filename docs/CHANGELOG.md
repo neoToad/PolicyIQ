@@ -140,3 +140,63 @@ Per Locked Decision #1 (drop `DocumentDeleteView`, staff-only deletes):
 - `pre-commit run --all-files` → all 10 hooks pass.
 - `python manage.py check` → 0 issues.
 - **Audit impact** (Phase 4 as a whole): closes H7 (Ollama-down integration), H8 (empty/below-threshold), M7 (delete auth), M9 (reindex failure), M10 (HistoryPageView + mid-stream), M11 (partial-failure matrix), M12 (pragma cleanup), L1 (MEDIA_ROOT isolation), L8 (constants extraction), L13 (test consolidation).
+
+### [Phase5.1] Document `Chunk` storage decision (audit M1, Locked Decision #2)
+- `CLAUDE.md` gained a 35-line note explaining why the relational `Chunk` model and ChromaDB text payloads are both kept (intentional duplication, not drift). The relational row is the source of truth for `page_number` / `token_offset` / `document_id` joins used by admin views, reindex purges, and citation lookups; ChromaDB holds the raw text for vector retrieval.
+
+### [Phase5.2] Drop `StageTimer` / `timing.py` (audit M4, Locked Decision #3)
+- Removed `policyiq/queries/services/timing.py` and `policyiq/queries/tests/test_timing.py`. The `StageTimer` class and its 6 tests are gone.
+- Added `# TODO: shared stage timer` markers at the 8 inline `t0 = time.monotonic()` blocks across 5 service modules (`generator.py`, `retriever.py`, `pipeline.py`, `indexer.py`, `extractor.py`) so a future shared-timer refactor can find them.
+
+### [Phase5.3] Drop leading underscores on `_generate_ollama` / `_generate_anthropic` (audit M6)
+- Renamed `queries.services.generator._generate_anthropic` to `generate_anthropic`. `_generate_ollama` was already removed in Phase 0.2 (its job moved to `policyiq.ollama.generate`).
+- Tests in `queries.tests.test_services.AnthropicGenerationTests` updated to import the public name.
+
+### [Phase5.4] Replace `_STAGE_BY_EXCEPTION_NAME` with `isinstance` ladder (audit L2)
+- `documents.services.pipeline.ingest_document` now classifies the failing stage via an `isinstance` ladder (ExtractionError → "extract", ChunkingError → "chunk", EmbeddingError → "embed", IndexingError → "index", else "unknown") instead of a string-name dict.
+- The string-name lookup was fragile — a renamed exception class would silently fall through to "unknown" and lose the stage info in the "Ingestion failed" log line.
+
+### [Phase5.5] `OllamaClient` cache key collisions (audit L5)
+- `documents.services.indexer.get_chroma_client` is now path-parameterized: `get_chroma_client(path: str | None = None)`. The path is part of the `lru_cache` key, so `override_settings(CHROMA_PERSIST_DIR=...)` in a test sees a fresh client rather than the singleton from a previous test.
+- Removed `cache_clear()` calls from `IndexerTests` and `IndexerLoggingTests` `setUp` (no longer needed — the cache is keyed on the path argument, not on the global function).
+- New `test_get_chroma_client_caches_per_path` test pins the per-path cache key behavior.
+- 245 tests pass (242 baseline + 3 new).
+
+### [Phase5.6] De-duplicate log lines between views and services (audit L6)
+- View layer now emits a single "request received" + "request complete" line per request; the per-stage lines ("Wrote …", "Dispatched …", "Returned 'no relevant information'") live in the service layer.
+- `documents.views.upload.UploadPageView.post` and `DocumentUploadAPIView.post` each log receipt + complete with timing.
+- `queries.services.query_pipeline.run_query` now emits the "Returned 'no relevant information'" line (it owns the no-information state transition); the views' duplicate copy is removed.
+
+### [Phase5.7] Annotate local-FS storage assumption (audit L10)
+- Added `LOCAL_FS_ASSUMPTION` comments at the two `default_storage.path()` / `document.file.path` call sites in `documents/services/pipeline.py` (and the canonical note at `settings.py:97-101`) stating: "Assumes `FileSystemStorage`; if `django-storages` is added, replace `default_storage.path()` with `default_storage.url()` or pass a stream." Future maintainers find the migration note at the actual call site, not buried in settings.
+
+### [Phase5.8] Extract `_DynamicRateMixin` and the four throttles (audit L17)
+- New `policyiq/policyiq/throttles.py` with `DynamicRateMixin` (renamed from `_DynamicRateMixin`; no longer underscore-prefixed since it's imported across module boundaries) and the four per-scope subclasses: `UploadAnonRateThrottle`, `UploadUserRateThrottle`, `QueryAnonRateThrottle`, `QueryUserRateThrottle`.
+- `documents/throttles.py` and `queries/throttles.py` shrink to re-export shims so existing `from documents.throttles import UploadAnonRateThrottle` import paths keep working.
+
+### [Phase5.9] Centralize PDF validation, add size check (audit M3)
+- `_validate_pdf` in `documents/views/_uploads.py` now rejects uploads over `settings.PDF_MAX_BYTES` (default 50 MiB) at the boundary, so a 500 MB upload is rejected before any disk write or extractor call.
+- Three new tests in `documents.tests.test_uploads_helper.ValidatePdfSizeTests`: small PDF under cap → None, oversize file → "too large" error, size check runs before magic bytes.
+
+### [Phase5.10] Annotate reindex pre-delete as intentional (audit M4)
+- `StaffDocumentReindexView.post` now has a comment block explaining the pre-purge (`Chunk.objects.filter(document=document).delete()` + `delete_document(...)`) is intentional, not redundant. The pre-delete guarantees a clean slate before the new run, so a partial reindex failure leaves the document in a known-empty state rather than half-old/half-new.
+
+### [Phase5.11] Misc low-priority items
+- **L12** CHANGELOG entry above documents the path-parameterized cache form (Phase 5.5).
+- **L15** `// TODO: stream get_text() for very large PDFs.` filed at `documents/services/extractor.py:30-32` (the page-text list comprehension). No commit.
+- **L16** `// TODO: fuse with single-pass counter.` filed at `documents/services/extractor.py:67-70` (the two-pass header/footer detection). No commit.
+- **L19** `extract_pages` now wraps `FileNotFoundError`, `ValueError`, `fitz.FileDataError`, and `fitz.EmptyFileError` in `ExtractionError` (audit M13) so the pipeline's `isinstance` ladder in `ingest_document` can map the stage cleanly. The two `test_models.ExtractPagesTests` cases for missing/corrupted PDFs were updated to assert `ExtractionError`.
+
+## Refactor pass — closes all findings in docs/REFACTOR_AUDIT.md
+
+Single 6-phase refactor build covering the full audit:
+
+- **Phase 0 — Foundation.** Shared `policyiq.settings` env-driven config; shared `policyiq.ollama` HTTP client (post_json, post_stream, embed_texts, generate, ping) with shared retry + envelope-detection; the duplicated `requests.post` + retry/backoff pattern in the embedder and generator is gone.
+- **Phase 1 — Pipeline rollback safety (H1).** `documents.services.pipeline.ingest_document` runs in `transaction.atomic()`; writes are ordered ChromaDB → PostgreSQL so a PG failure is compensated by deleting the just-written vectors.
+- **Phase 2 — Delete-path safety (H2).** `delete_document_with_chunks` service atomic-orders ChromaDB delete before PG delete; `DocumentDeleteView` consolidated behind the staff-only path (Locked Decision #1).
+- **Phase 3 — View → service consolidation.** `run_query` (queries), `safe_stream` (mid-stream error sentinel, H6), `ingest_uploaded_pdf` (documents), `_process_uploads` (per-file loop helper) — the views shrink to 3–5 line adapters.
+- **Phase 4 — Test coverage batch (H7, H8, M7, M9, M10, M11, M12, L1, L8, L13).** Ollama-down 502 + log tests, empty/below-threshold coverage, delete auth tests, reindex 500 + chunk-purge ordering, history view tests, mid-stream connection drop, upload partial-failure matrix, isolated MEDIA_ROOT, constants extraction, pytest-style consolidation (Locked Decision #4).
+- **Phase 5 — Cleanup, dedup, doc fixes.** StageTimer removed (Locked Decision #3), leading underscores dropped, isinstance ladder, path-parameterized chromadb cache, log dedup, local-FS annotation, throttles consolidated, PDF size check, `extract_pages` raises domain `ExtractionError` consistently. `Chunk` storage decision documented in `CLAUDE.md` (Locked Decision #2).
+- **Phase 6 — Verify.** `pytest policyiq/` → 245 passed, 95% coverage; `ruff check policyiq/` clean; `ruff format --check policyiq/` clean; `pre-commit run --all-files` clean (10 hooks); `python manage.py check` 0 issues.
+
+All audit items closed: H1, H2, H4, H6, H7, H8, M1 (per Locked Decision #2), M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, L1, L2, L5, L6, L8, L10, L11, L12, L13, L17, L18, L19, L20, L21.
