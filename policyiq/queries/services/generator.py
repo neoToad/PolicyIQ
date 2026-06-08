@@ -55,7 +55,7 @@ def safe_stream(iterator):
         yield f"<!-- error: {exc} -->"
 
 
-def _generate_anthropic(prompt: str) -> Iterator[str]:
+def generate_anthropic(prompt: str) -> Iterator[str]:
     if anthropic is None:
         raise GenerationError("Anthropic SDK is not installed. Install it with: pip install anthropic")
     api_key = getattr(settings, "ANTHROPIC_API_KEY", None)
@@ -106,7 +106,7 @@ def generate_response(prompt: str) -> Iterator[str]:
     if backend == "ollama":
         gen = _ollama_token_stream(prompt)
     elif backend == "anthropic":
-        gen = _generate_anthropic(prompt)
+        gen = generate_anthropic(prompt)
     else:
         raise ValueError(f"Unsupported LLM_BACKEND: {backend}")
 

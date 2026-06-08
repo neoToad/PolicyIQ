@@ -4,7 +4,7 @@ from django.test import SimpleTestCase, override_settings
 
 from queries.exceptions import GenerationError
 from queries.services.citations import build_citations
-from queries.services.generator import _generate_anthropic, build_prompt, generate_response
+from queries.services.generator import build_prompt, generate_anthropic, generate_response
 from queries.services.retriever import retrieve_chunks
 
 
@@ -240,7 +240,7 @@ class DispatchTests(SimpleTestCase):
         self.assertEqual(tokens, ["token1", "token2"])
         mock_generate.assert_called_once_with("llama3.2", "prompt", stream=True)
 
-    @mock.patch("queries.services.generator._generate_anthropic")
+    @mock.patch("queries.services.generator.generate_anthropic")
     @override_settings(LLM_BACKEND="anthropic")
     def test_generate_response_dispatches_to_anthropic_when_configured(self, mock_anthropic):
         mock_anthropic.return_value = iter(["tokenA", "tokenB"])
@@ -273,7 +273,7 @@ class AnthropicGenerationTests(SimpleTestCase):
         mock_client.messages.stream.return_value.__exit__ = mock.Mock(return_value=False)
         mock_client_cls.return_value = mock_client
 
-        tokens = list(_generate_anthropic("test prompt"))
+        tokens = list(generate_anthropic("test prompt"))
 
         self.assertEqual(tokens, ["Hello", " world"])
         mock_client_cls.assert_called_once_with(api_key="test-key")
@@ -290,7 +290,7 @@ class AnthropicGenerationTests(SimpleTestCase):
         mock_client_cls.return_value = mock_client
 
         with self.assertRaisesRegex(GenerationError, "Anthropic"):
-            list(_generate_anthropic("test prompt"))
+            list(generate_anthropic("test prompt"))
 
 
 class GeneratorSettingsTests(SimpleTestCase):
@@ -340,7 +340,7 @@ class GeneratorSettingsTests(SimpleTestCase):
         with (
             override_settings(ANTHROPIC_API_KEY="test-key", ANTHROPIC_MODEL="claude-haiku-3", ANTHROPIC_MAX_TOKENS=512),
         ):
-            list(_generate_anthropic("test"))
+            list(generate_anthropic("test"))
 
         call_kwargs = mock_client.messages.stream.call_args.kwargs
         self.assertEqual(call_kwargs["model"], "claude-haiku-3")

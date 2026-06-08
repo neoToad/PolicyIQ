@@ -2,7 +2,7 @@
 
 Phase 0.2 consolidates the duplicated ``requests.post`` + retry/backoff
 pattern that lived in ``embedder._embed_batch_with_retry`` /
-``embedder._embed_single_with_retry`` and ``generator._generate_ollama``
+``embedder._embed_single_with_retry`` and ``generator._ollama_token_stream``
 (audit H4). Every Ollama-bound service should funnel through this
 module so the retry policy, error-envelope detection, and health probe
 behave identically.
