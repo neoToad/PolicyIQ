@@ -350,16 +350,19 @@ class AtomicityTests(TestCase):
 
         # Let the real ingest_document run; mock the upstream services
         # to deterministic data, and make index_document raise so the
-        # post-pre-delete pipeline path is exercised.
+        # post-pre-delete pipeline path is exercised. The view now
+        # catches the pipeline exception and returns 500 (Phase 4.4).
         with (
             mock.patch("documents.services.pipeline.index_document", side_effect=IndexingError("boom")),
             mock.patch("documents.services.pipeline.embed_chunks", return_value=self.embedded),
             mock.patch("documents.services.pipeline.chunk_pages", return_value=self.chunks),
             mock.patch("documents.services.pipeline.clean_pages", return_value=self.cleaned),
             mock.patch("documents.services.pipeline.extract_pages", return_value=self.extracted),
-            self.assertRaises(IndexingError),
         ):
-            view(request, pk=str(self.document.id))
+            response = view(request, pk=str(self.document.id))
+
+        # The view returned 5xx because ingest failed.
+        self.assertGreaterEqual(response.status_code, 500)
 
         # No orphan chunks: pre-delete cleared the seed, the rolled-back
         # transaction cleared anything the pipeline would have written.

@@ -117,8 +117,23 @@ class StaffDocumentReindexView(View):
         Chunk.objects.filter(document=document).delete()
         delete_document(str(document.id))
 
-        # Re-run full pipeline via the shared service.
-        ingest_document(document)
+        # Re-run full pipeline via the shared service. Audit M9: if the
+        # new ingest raises (e.g., ExtractionError on a corrupt PDF), we
+        # log at ERROR level and return 500 so the operator sees the
+        # failure in the admin UI instead of a silent 200.
+        try:
+            ingest_document(document)
+        except Exception as exc:
+            logger.error(
+                "Reindex failed for document_id=%s: %s",
+                pk,
+                exc,
+                exc_info=True,
+            )
+            return HttpResponse(
+                f"Reindex failed: {exc}",
+                status=500,
+            )
         return HttpResponse(status=200)
 
 

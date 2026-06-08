@@ -359,6 +359,89 @@ class StaffDocumentReindexViewTests(SimpleTestCase):
         mock_delete_document.assert_called_once_with(str(doc_id))
         mock_ingest.assert_called_once_with(doc)
 
+    @mock.patch("documents.views.upload.ingest_document")
+    @mock.patch("documents.views.upload.delete_document")
+    @mock.patch("documents.views.upload.Chunk.objects.filter")
+    @mock.patch("documents.views.upload.Document.objects.get")
+    def test_reindex_returns_500_when_ingest_raises(
+        self,
+        mock_get_document,
+        mock_chunk_filter,
+        mock_delete_document,
+        mock_ingest,
+    ):
+        """Audit M9: when the new ingest_document raises (e.g., ExtractionError
+        on a corrupt PDF), the view must surface a 5xx so the operator sees
+        a failure in the admin UI rather than a silent 200."""
+        from documents.exceptions import ExtractionError
+
+        doc_id = uuid4()
+        doc = mock.Mock(id=doc_id, name="bad.pdf")
+        mock_get_document.return_value = doc
+        mock_chunk_filter.return_value = mock.Mock(delete=mock.Mock())
+        mock_ingest.side_effect = ExtractionError("PDF is corrupt")
+
+        request = self.factory.post("/admin/documents/" + str(doc_id) + "/reindex/")
+        request.user = self._staff_user()
+
+        with self.assertLogs("documents.views", level="ERROR") as cm:
+            response = self.view(request, pk=str(doc_id))
+
+        self.assertGreaterEqual(response.status_code, 500)
+        # The purge has already happened; we just need to make sure
+        # the failure is loud.
+        error_lines = [line for line in cm.output if "reindex" in line.lower() or "ExtractionError" in line]
+        self.assertGreaterEqual(len(error_lines), 1)
+
+
+class StaffDocumentReindexViewChunkPurgeTests(TestCase):
+    """Audit M9: when reindex fails partway through, the pre-purge of old
+    Chunk rows must still complete — leaving a mix of stale Chunks and
+    no fresh chunks is worse than a clean re-purge with no new ingest.
+
+    This test uses a real DB (``TestCase``) so we can assert on
+    ``Chunk.objects.filter(document=...).count()`` after the view runs.
+    """
+
+    def setUp(self):
+        from documents.models import Chunk, Document
+
+        self.factory = APIRequestFactory()
+        self.view = StaffDocumentReindexView.as_view()
+        self.doc = Document.objects.create(
+            name="purge.pdf",
+            file=SimpleUploadedFile("purge.pdf", b"%PDF-fake"),
+            page_count=1,
+            chunk_count=1,
+        )
+        Chunk.objects.create(
+            document=self.doc,
+            text="stale chunk",
+            page_number=1,
+            token_offset=0,
+        )
+
+    @mock.patch("documents.views.upload.ingest_document")
+    @mock.patch("documents.views.upload.delete_document")
+    def test_reindex_purges_old_chunks_even_on_failure(self, mock_delete_document, mock_ingest):
+        """Even when ingest_document raises mid-flight, the pre-purge of
+        PG chunks must have run — otherwise the next reindex would see
+        stale chunks and double-ingest."""
+        from documents.exceptions import ExtractionError
+        from documents.models import Chunk
+
+        mock_ingest.side_effect = ExtractionError("PDF is corrupt on second pass")
+
+        request = APIRequestFactory().post("/admin/documents/" + str(self.doc.id) + "/reindex/")
+        user = mock.Mock(is_authenticated=True, is_staff=True)
+        request.user = user
+
+        response = self.view(request, pk=str(self.doc.id))
+
+        self.assertGreaterEqual(response.status_code, 500)
+        # The stale chunk is gone — the purge ran before the ingest.
+        self.assertEqual(Chunk.objects.filter(document=self.doc).count(), 0)
+
 
 class CORSTests(SimpleTestCase):
     def test_api_preflight_includes_cors_headers(self):
