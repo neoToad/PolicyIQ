@@ -7,13 +7,13 @@ that returns ``(results, status_code)``. These tests pin the new
 boundary.
 """
 
-import tempfile
 from unittest import mock
 from uuid import uuid4
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
+from documents.tests._isolation import IsolatedMediaRootMixin
 from documents.views._uploads import _process_uploads
 
 
@@ -25,19 +25,23 @@ def _txt_upload(name: str = "notes.txt") -> SimpleUploadedFile:
     return SimpleUploadedFile(name, b"not a pdf", content_type="text/plain")
 
 
-class ProcessUploadsTests(TestCase):
+class ProcessUploadsTests(IsolatedMediaRootMixin, TestCase):
     """Unit tests for the ``_process_uploads`` helper.
 
     The helper owns the per-file loop, the validation, the per-file
     error handling, and the success/validation-error/all-failure
     status-code logic. The two upload views call it and then format
     the response.
+
+    The :class:`IsolatedMediaRootMixin` provides a unique per-test
+    ``MEDIA_ROOT`` via :func:`tempfile.mkdtemp` so tests do not share
+    ``tempfile.gettempdir()`` (audit L1).
     """
 
     def setUp(self):
+        IsolatedMediaRootMixin.setUp(self)
         self.username = "alice"
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.views._uploads.ingest_uploaded_pdf")
     def test_process_uploads_returns_success_dict_for_valid_pdf(self, mock_ingest):
         """A single valid PDF produces a result dict with success=True and a document_id."""
@@ -58,7 +62,6 @@ class ProcessUploadsTests(TestCase):
         self.assertEqual(results[0]["page_count"], 2)
         self.assertEqual(results[0]["chunk_count"], 5)
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.views._uploads.ingest_uploaded_pdf")
     def test_process_uploads_returns_validation_error_for_non_pdf(self, mock_ingest):
         """A non-PDF file produces a validation-error result and a 400 status."""
@@ -71,7 +74,6 @@ class ProcessUploadsTests(TestCase):
         self.assertIn("Invalid content type", results[0]["error"])
         mock_ingest.assert_not_called()
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.views._uploads.ingest_uploaded_pdf")
     def test_process_uploads_returns_500_when_pipeline_fails(self, mock_ingest):
         """A valid PDF whose ingestion raises produces a 500 + failure result."""
@@ -84,7 +86,6 @@ class ProcessUploadsTests(TestCase):
         self.assertFalse(results[0]["success"])
         self.assertIn("Invalid or corrupted PDF", results[0]["error"])
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.views._uploads.ingest_uploaded_pdf")
     def test_process_uploads_mixed_success_and_validation(self, mock_ingest):
         """Mixed success + validation → 201 (any success wins)."""
@@ -106,7 +107,6 @@ class ProcessUploadsTests(TestCase):
         self.assertFalse(results[1]["success"])
         self.assertEqual(results[1]["reason"], "validation")
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.views._uploads.ingest_uploaded_pdf")
     def test_process_uploads_mixed_success_and_pipeline_failure(self, mock_ingest):
         """Mixed success + pipeline failure → 201 (any success wins)."""
@@ -134,7 +134,6 @@ class ProcessUploadsTests(TestCase):
         self.assertFalse(results[1]["success"])
         self.assertIn("corrupt", results[1]["error"])
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.views._uploads.ingest_uploaded_pdf")
     def test_process_uploads_passes_username_to_pipeline(self, mock_ingest):
         """The username argument is forwarded to ``ingest_uploaded_pdf`` so the

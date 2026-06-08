@@ -1,4 +1,3 @@
-import tempfile
 from datetime import UTC
 from unittest import mock
 from uuid import uuid4
@@ -8,6 +7,7 @@ from django.test import RequestFactory, SimpleTestCase, TestCase, override_setti
 from rest_framework import status
 from rest_framework.test import APIRequestFactory, force_authenticate
 
+from documents.tests._isolation import IsolatedMediaRootMixin
 from documents.views import (
     DocumentUploadAPIView,
     StaffDocumentDeleteView,
@@ -17,8 +17,9 @@ from documents.views import (
 )
 
 
-class DocumentUploadAPITests(TestCase):
+class DocumentUploadAPITests(IsolatedMediaRootMixin, TestCase):
     def setUp(self):
+        IsolatedMediaRootMixin.setUp(self)
         self.factory = APIRequestFactory()
         self.view = DocumentUploadAPIView.as_view()
         self.user = mock.Mock()
@@ -29,7 +30,6 @@ class DocumentUploadAPITests(TestCase):
         self.user.pk = 1
         self.user.id = 1
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_pdf_runs_pipeline_and_returns_expected_payload(self, mock_storage, mock_ingest):
@@ -64,7 +64,6 @@ class DocumentUploadAPITests(TestCase):
         self.assertEqual(result["chunk_count"], 2)
         mock_ingest.assert_called_once()
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_returns_structured_error_on_pipeline_failure(self, mock_storage, mock_ingest):
@@ -620,10 +619,11 @@ class UploadThrottleTests(TestCase):
         self.assertIn(UploadUserRateThrottle, DocumentUploadAPIView.throttle_classes)
 
 
-class DocumentUploadLoggingTests(TestCase):
+class DocumentUploadLoggingTests(IsolatedMediaRootMixin, TestCase):
     """Tests for the `documents.views` logger on the upload path."""
 
     def setUp(self):
+        IsolatedMediaRootMixin.setUp(self)
         self.factory = APIRequestFactory()
         self.view = DocumentUploadAPIView.as_view()
         self.user = mock.Mock()
@@ -633,7 +633,6 @@ class DocumentUploadLoggingTests(TestCase):
         self.user.pk = 1
         self.user.id = 1
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_logs_received_line(self, mock_storage, mock_ingest):
@@ -669,7 +668,6 @@ class DocumentUploadLoggingTests(TestCase):
         self.assertIn("MB", received_lines[0])
         self.assertIn("user=alice", received_lines[0])
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_logs_validated_and_written_lines(self, mock_storage, mock_ingest):
@@ -702,7 +700,6 @@ class DocumentUploadLoggingTests(TestCase):
         written_lines = [line for line in cm.output if "Wrote" in line and "policy.pdf" in line]
         self.assertEqual(len(written_lines), 1)
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_logs_dispatched_line_on_success(self, mock_storage, mock_ingest):
@@ -739,7 +736,6 @@ class DocumentUploadLoggingTests(TestCase):
         # Duration "in T.TTs" suffix.
         self.assertIn("in ", dispatched_lines[0])
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_upload_logs_error_with_exception_type_on_failure(self, mock_storage, mock_ingest):
@@ -830,7 +826,7 @@ class HomePageViewTests(TestCase):
         self.assertIn("stats", response.context)
 
 
-class UploadPartialFailureTests(TestCase):
+class UploadPartialFailureTests(IsolatedMediaRootMixin, TestCase):
     """Audit M11: cover the multi-file upload partial-failure matrix.
 
     The per-file loop in ``_process_uploads`` produces 4 distinct
@@ -842,6 +838,7 @@ class UploadPartialFailureTests(TestCase):
     """
 
     def setUp(self):
+        IsolatedMediaRootMixin.setUp(self)
         from django.core.cache import cache
 
         cache.clear()
@@ -863,7 +860,6 @@ class UploadPartialFailureTests(TestCase):
         force_authenticate(request, user=self.user)
         return self.view(request)
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_two_files_one_success_one_pipeline_failure_returns_201(
@@ -902,7 +898,6 @@ class UploadPartialFailureTests(TestCase):
         self.assertFalse(response.data["results"][1]["success"])
         self.assertIn("corrupt on second file", response.data["results"][1]["error"])
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_two_files_one_success_one_validation_failure_returns_201(
@@ -934,7 +929,6 @@ class UploadPartialFailureTests(TestCase):
         self.assertFalse(response.data["results"][1]["success"])
         self.assertEqual(response.data["results"][1]["reason"], "validation")
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_one_file_pipeline_failure_returns_500(self, mock_storage, mock_ingest):

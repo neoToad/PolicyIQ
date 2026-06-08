@@ -13,7 +13,6 @@ that owns the temp-file lifecycle and the ``Document.objects.create``
 call — both of which were previously tangled into the view layer.
 """
 
-import tempfile
 from unittest import mock
 
 from django.core.files.base import ContentFile
@@ -25,6 +24,7 @@ from django.test import TestCase, override_settings
 from documents.exceptions import ChunkingError, ExtractionError, IndexingError
 from documents.models import Chunk, Document
 from documents.services.pipeline import ingest_document, ingest_uploaded_pdf
+from documents.tests._isolation import IsolatedMediaRootMixin
 
 
 class PipelineLoggingTests(TestCase):
@@ -449,7 +449,7 @@ class AtomicityTests(TestCase):
         self.assertIn("1", orphan_lines[0])  # chunk_count = 1 embedded chunk
 
 
-class IngestUploadedPdfTests(TestCase):
+class IngestUploadedPdfTests(IsolatedMediaRootMixin, TestCase):
     """Tests for ``documents.services.pipeline.ingest_uploaded_pdf``.
 
     The audit-M2 fix moves the temp-file lifecycle and the
@@ -458,13 +458,13 @@ class IngestUploadedPdfTests(TestCase):
     """
 
     def setUp(self):
+        IsolatedMediaRootMixin.setUp(self)
         self.upload = SimpleUploadedFile(
             "policy.pdf",
             b"%PDF-1.4 fake content",
             content_type="application/pdf",
         )
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_ingest_uploaded_pdf_creates_document_and_ingests(self, mock_storage, mock_ingest):
@@ -497,7 +497,6 @@ class IngestUploadedPdfTests(TestCase):
         self.assertEqual(document.page_count, 2)
         self.assertEqual(document.chunk_count, 2)
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_ingest_uploaded_pdf_deletes_temp_file_on_success(self, mock_storage, mock_ingest):
@@ -513,7 +512,6 @@ class IngestUploadedPdfTests(TestCase):
         self.assertEqual(mock_storage.delete.call_count, 1)
         mock_storage.delete.assert_called_with("documents/_tmp_policy.pdf")
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_ingest_uploaded_pdf_rolls_back_on_ingest_document_failure(self, mock_storage, mock_ingest):
@@ -531,7 +529,6 @@ class IngestUploadedPdfTests(TestCase):
         # The temp file was cleaned up.
         mock_storage.delete.assert_called_with("documents/_tmp_broken.pdf")
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.default_storage")
     def test_ingest_uploaded_pdf_writes_upload_chunks_to_storage(self, mock_storage):
         """The full upload payload lands in the temp file in storage.
@@ -564,7 +561,6 @@ class IngestUploadedPdfTests(TestCase):
         # The full upload bytes made it to the temp file.
         self.assertEqual(bytes(written), b"%PDF-1.4 fake content")
 
-    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
     @mock.patch("documents.services.pipeline.ingest_document")
     @mock.patch("documents.services.pipeline.default_storage")
     def test_ingest_uploaded_pdf_strips_path_components_from_name(self, mock_storage, mock_ingest):
