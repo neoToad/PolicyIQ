@@ -72,6 +72,10 @@ def ingest_uploaded_pdf(upload: UploadedFile, *, username: str | None = None) ->
             default_storage.delete(temp_path)
         raise
 
+    # LOCAL_FS_ASSUMPTION: assumes FileSystemStorage; if django-storages is
+    # added, replace `default_storage.path(temp_path)` with
+    # `default_storage.url(temp_path)` or pass a stream to the extractor.
+    # See docs/REFACTOR_AUDIT.md L10.
     full_path = default_storage.path(temp_path)
     logger.info("Wrote %r to %s", safe_name, temp_path)
 
@@ -140,6 +144,9 @@ def ingest_document(document, file_path: str | None = None) -> dict:
     Returns:
         A dict with keys: pages, cleaned_pages, chunks, embedded_chunks.
     """
+    # LOCAL_FS_ASSUMPTION: assumes FileSystemStorage; if django-storages is
+    # added, replace `document.file.path` with `default_storage.url(...)` or
+    # pass a stream to the extractor. See docs/REFACTOR_AUDIT.md L10.
     path = file_path or document.file.path
     t_start = time.monotonic()
     logger.info("Starting ingestion for document %s (%s)", document.id, document.name)
