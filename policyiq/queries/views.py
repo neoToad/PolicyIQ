@@ -6,8 +6,10 @@ from django.conf import settings
 from django.http import HttpRequest, HttpResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.views import View
+from documents.exceptions import EmbeddingError
 from documents.models import Document
 from documents.services.indexer import get_collection
+from policyiq.ollama import OllamaError
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -19,8 +21,14 @@ from queries.services import health
 from queries.services.query_pipeline import run_query
 from queries.services.retriever import MAX_QUESTION_LOG_CHARS
 from queries.throttles import QueryAnonRateThrottle, QueryUserRateThrottle
+from queries.exceptions import GenerationError
 
 logger = logging.getLogger("queries.views")
+
+# Audit H7: any failure to reach the LLM/embedding backend is treated as
+# a downstream-failure (502 Bad Gateway) — the client cannot reasonably
+# retry, and a 200 with a partial stream would mislead the user.
+_DOWNSTREAM_ERRORS = (OllamaError, EmbeddingError, GenerationError)
 
 
 def _top_k() -> int:
@@ -40,6 +48,17 @@ def _log_query_receipt(question: str, username: str, top_k: int) -> None:
     """
     safe_q = question[:MAX_QUESTION_LOG_CHARS] + "..." if len(question) > MAX_QUESTION_LOG_CHARS else question
     logger.info('Query received: "%s" (user=%s, top_k=%d)', safe_q, username, top_k)
+
+
+def _ollama_down_error(exc: Exception) -> str:
+    """Build a human-readable error message for the 502 path.
+
+    Audit H7: when the LLM backend is unreachable, the client must see
+    a clear message, not a stack trace. We surface the original message
+    because operators find it useful; production deployment is expected
+    to scrub it if needed.
+    """
+    return f"Ollama is unreachable: {exc}"
 
 
 class AskPageView(View):
@@ -66,7 +85,14 @@ class AskPageView(View):
         _log_query_receipt(question, username, top_k)
 
         t0 = time.monotonic()
-        result = run_query(question, document_id, top_k=top_k, threshold=settings.SIMILARITY_THRESHOLD)
+        try:
+            result = run_query(question, document_id, top_k=top_k, threshold=settings.SIMILARITY_THRESHOLD)
+        except _DOWNSTREAM_ERRORS as exc:
+            logger.error(_ollama_down_error(exc))
+            return HttpResponse(
+                f"<div class='card' style='color: #b91c1c;'><p>Ollama is unreachable: {exc}</p></div>",
+                status=502,
+            )
 
         if result.kind == "no_information":
             elapsed = time.monotonic() - t0
@@ -110,7 +136,14 @@ class QueryAPIView(APIView):
         _log_query_receipt(question, username, top_k)
 
         t0 = time.monotonic()
-        result = run_query(question, document_id, top_k=top_k, threshold=settings.SIMILARITY_THRESHOLD)
+        try:
+            result = run_query(question, document_id, top_k=top_k, threshold=settings.SIMILARITY_THRESHOLD)
+        except _DOWNSTREAM_ERRORS as exc:
+            logger.error(_ollama_down_error(exc))
+            return Response(
+                {"error": _ollama_down_error(exc)},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
         if result.kind == "no_information":
             elapsed = time.monotonic() - t0

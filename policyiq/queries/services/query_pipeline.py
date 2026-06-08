@@ -16,6 +16,13 @@ The pipeline:
    the answer, wrapped in :func:`queries.services.generator.safe_stream`
    so mid-stream :class:`GenerationError` becomes a sentinel marker
    (audit H6) instead of a truncated response.
+
+Audit H7: when the LLM backend is unreachable, ``run_query`` raises
+:class:`policyiq.ollama.OllamaError` (or its :class:`EmbeddingError`
+alias) so the view can return a 502 Bad Gateway. We do this by calling
+``generate_response`` once eagerly — if it raises before yielding a
+token, the exception propagates and the view handles it. If it raises
+mid-stream, :func:`safe_stream` catches it and yields the sentinel.
 """
 
 from __future__ import annotations
@@ -77,8 +84,13 @@ def run_query(
 
     Returns:
         A :class:`QueryResult` with ``kind`` of either ``"answer"``
-        (with a streaming ``answer_stream`` and citations) or
+        (with a streaming ``answer_stream` and citations) or
         ``"no_information"`` (no stream, empty citations).
+
+    Raises:
+        policyiq.ollama.OllamaError: If the LLM/embedding backend is
+            unreachable or returns an error envelope (audit H7). The
+            view layer maps this to a 502 Bad Gateway.
     """
     if top_k is None:
         top_k = settings.RETRIEVAL_TOP_K
@@ -90,8 +102,30 @@ def run_query(
         return QueryResult(kind="no_information")
 
     citations = build_citations(chunks)
+    # Audit H7: pre-flight ``generate_response`` so a backend-down
+    # failure surfaces BEFORE we hand a stream to the view. The function
+    # is a generator, so calling ``next()`` here is what actually runs
+    # the first HTTP request. Any OllamaError raised at this point
+    # propagates to the view's 502 handler. Once we have a first token
+    # the stream is handed to safe_stream for the mid-stream sentinel
+    # behaviour (audit H6).
+    gen = generate_response(prompt)
+    try:
+        first_token = next(gen)
+    except StopIteration:
+        first_token = ""
     return QueryResult(
         kind="answer",
-        answer_stream=safe_stream(generate_response(prompt)),
+        answer_stream=safe_stream(_chain_first_token(first_token, gen)),
         citations=citations,
     )
+
+
+def _chain_first_token(first: str, rest: Iterator[str]) -> Iterator[str]:
+    """Yield ``first`` then everything from ``rest``.
+
+    Used to reassemble a generator after we pulled the first token for
+    the pre-flight OllamaError check.
+    """
+    yield first
+    yield from rest
