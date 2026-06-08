@@ -830,6 +830,152 @@ class HomePageViewTests(TestCase):
         self.assertIn("stats", response.context)
 
 
+class UploadPartialFailureTests(TestCase):
+    """Audit M11: cover the multi-file upload partial-failure matrix.
+
+    The per-file loop in ``_process_uploads`` produces 4 distinct
+    response shapes (full success, full validation, full pipeline-failure,
+    mixed). Each maps to a specific HTTP status code and a specific
+    ``results`` list. These tests drive the actual ``DocumentUploadAPIView``
+    request handler to assert the wire shape — they are end-to-end
+    through the view, not the helper.
+    """
+
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.factory = APIRequestFactory()
+        self.view = DocumentUploadAPIView.as_view()
+        self.user = mock.Mock()
+        self.user.is_authenticated = True
+        self.user.is_staff = False
+        self.user.username = "alice"
+        self.user.pk = 1
+        self.user.id = 1
+
+    def _post_files(self, files):
+        request = self.factory.post(
+            "/api/documents/upload/",
+            {"file": files},
+            format="multipart",
+        )
+        force_authenticate(request, user=self.user)
+        return self.view(request)
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
+    def test_two_files_one_success_one_pipeline_failure_returns_201(
+        self, mock_storage, mock_ingest,
+    ):
+        """Audit M11: mixed success + pipeline-failure → 201 (any success wins).
+        The response body is ``{"results": [..., ...]}`` with one success
+        and one failure dict, not a generic error envelope."""
+        mock_storage.save.return_value = "documents/_tmp_x.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_x.pdf"
+
+        good_doc = mock.Mock()
+        good_doc.id = uuid4()
+        good_doc.name = "good.pdf"
+        good_doc.page_count = 1
+        good_doc.chunk_count = 1
+
+        def _side_effect(upload, file_path=None):
+            if "bad" in upload.name:
+                raise ValueError("corrupt on second file")
+            good_doc.name = upload.name
+            return good_doc
+
+        mock_ingest.side_effect = _side_effect
+
+        response = self._post_files(
+            [
+                SimpleUploadedFile("good.pdf", b"%PDF-good", content_type="application/pdf"),
+                SimpleUploadedFile("bad.pdf", b"%PDF-bad", content_type="application/pdf"),
+            ]
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertTrue(response.data["results"][0]["success"])
+        self.assertFalse(response.data["results"][1]["success"])
+        self.assertIn("corrupt on second file", response.data["results"][1]["error"])
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
+    def test_two_files_one_success_one_validation_failure_returns_201(
+        self, mock_storage, mock_ingest,
+    ):
+        """Audit M11: mixed success + validation-failure → 201 (any success wins).
+        The validation-failure result carries ``reason="validation"`` so the
+        UI can render a different message than a pipeline-failure result."""
+        mock_storage.save.return_value = "documents/_tmp_good.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_good.pdf"
+
+        good_doc = mock.Mock()
+        good_doc.id = uuid4()
+        good_doc.name = "good.pdf"
+        good_doc.page_count = 1
+        good_doc.chunk_count = 1
+        mock_ingest.return_value = good_doc
+
+        response = self._post_files(
+            [
+                SimpleUploadedFile("good.pdf", b"%PDF-good", content_type="application/pdf"),
+                SimpleUploadedFile("notes.txt", b"not a pdf", content_type="text/plain"),
+            ]
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data["results"]), 2)
+        self.assertTrue(response.data["results"][0]["success"])
+        self.assertFalse(response.data["results"][1]["success"])
+        self.assertEqual(response.data["results"][1]["reason"], "validation")
+
+    @override_settings(MEDIA_ROOT=tempfile.gettempdir())
+    @mock.patch("documents.services.pipeline.ingest_document")
+    @mock.patch("documents.services.pipeline.default_storage")
+    def test_one_file_pipeline_failure_returns_500(self, mock_storage, mock_ingest):
+        """Audit M11: single file, pipeline failure → 500. The response body
+        is still a results list (with one failure dict), not a generic
+        ``{"error": "..."}`` envelope."""
+        mock_storage.save.return_value = "documents/_tmp_broken.pdf"
+        mock_storage.path.return_value = "/tmp/media/documents/_tmp_broken.pdf"
+        mock_ingest.side_effect = ValueError("PDF is corrupt")
+
+        response = self._post_files(
+            [SimpleUploadedFile("broken.pdf", b"%PDF-broken", content_type="application/pdf")]
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertFalse(response.data["results"][0]["success"])
+        self.assertIn("PDF is corrupt", response.data["results"][0]["error"])
+
+    def test_one_file_validation_failure_returns_400(self):
+        """Audit M11: single non-PDF file → 400 with a validation reason."""
+        response = self._post_files(
+            [SimpleUploadedFile("notes.txt", b"not a pdf", content_type="text/plain")]
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertFalse(response.data["results"][0]["success"])
+        self.assertEqual(response.data["results"][0]["reason"], "validation")
+
+    def test_upload_result_serializer_accepts_failure_shape(self):
+        """Audit M11: the failure dict from the loop (no document_id field)
+        must pass ``UploadResultSerializer.is_valid()`` — the view's
+        ``serializer.is_valid(raise_exception=True)`` would otherwise 500."""
+        from documents.serializers import UploadResultSerializer
+
+        failure_payload = {"success": False, "error": "PDF is corrupt"}
+        serializer = UploadResultSerializer(data=failure_payload)
+        self.assertTrue(serializer.is_valid(), msg=str(serializer.errors))
+
+
 class HistoryPageViewTests(TestCase):
     """Audit M10: cover `HistoryPageView` rendering, ordering, and XSS-safety.
 
