@@ -27,6 +27,8 @@ mid-stream, :func:`safe_stream` catches it and yields the sentinel.
 
 from __future__ import annotations
 
+import logging
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Literal
@@ -36,6 +38,8 @@ from django.conf import settings
 from queries.services.citations import build_citations
 from queries.services.generator import build_prompt, generate_response, safe_stream
 from queries.services.retriever import retrieve_chunks
+
+logger = logging.getLogger("queries.pipeline")
 
 QueryKind = Literal["answer", "no_information"]
 
@@ -95,10 +99,15 @@ def run_query(
     if top_k is None:
         top_k = settings.RETRIEVAL_TOP_K
 
+    t_start = time.monotonic()
     chunks = retrieve_chunks(question, document_id=document_id, top_k=top_k)
     prompt = build_prompt(question, chunks, similarity_threshold=threshold)
 
     if prompt is None:
+        # Audit L6: the "no relevant information" line is a service-level
+        # event, not a view-level one. The view layer logs the receipt and
+        # complete lines; the service owns the per-stage state transitions.
+        logger.info("Returned 'no relevant information' response in %.2fs", time.monotonic() - t_start)
         return QueryResult(kind="no_information")
 
     citations = build_citations(chunks)

@@ -7,6 +7,7 @@ helper and format the response.
 """
 
 import logging
+import time
 
 from django.contrib.admin.views.decorators import staff_member_required
 from django.http import HttpRequest, HttpResponse
@@ -59,7 +60,17 @@ class UploadPageView(View):
             )
 
         username = getattr(getattr(request, "user", None), "username", "anonymous")
+        # Audit L6: view logs the receipt line; the per-stage lines
+        # (Wrote / Dispatched / per-failure) live in the pipeline service.
+        logger.info("Upload request received: %d file(s) (user=%s)", len(uploads), username)
+        t0 = time.monotonic()
         results, status_code = _process_uploads(uploads, username=username)
+        logger.info(
+            "Upload request complete: %d file(s), status=%d in %.2fs",
+            len(uploads),
+            status_code,
+            time.monotonic() - t0,
+        )
         return render(
             request,
             "documents/_upload_result.html",
@@ -113,7 +124,12 @@ class StaffDocumentReindexView(View):
         except Document.DoesNotExist:
             return HttpResponse(status=404)
 
-        # Purge old chunks from PG and ChromaDB
+        # Purge old chunks from PG and ChromaDB before re-ingesting.
+        # Audit M4: this pre-delete is intentional, not redundant with the
+        # atomic writes inside ``ingest_document``. It guarantees a clean
+        # slate (no leftover embeddings/chunks) before the new run, so a
+        # partial reindex failure leaves the document in a known-empty
+        # state rather than half-old/half-new.
         Chunk.objects.filter(document=document).delete()
         delete_document(str(document.id))
 
@@ -153,7 +169,17 @@ class DocumentUploadAPIView(APIView):
             )
 
         username = getattr(getattr(request, "user", None), "username", "anonymous")
+        # Audit L6: view logs the receipt line; the per-stage lines
+        # (Wrote / Dispatched / per-failure) live in the pipeline service.
+        logger.info("Upload request received: %d file(s) (user=%s)", len(uploads), username)
+        t0 = time.monotonic()
         results, status_code = _process_uploads(uploads, username=username)
+        logger.info(
+            "Upload request complete: %d file(s), status=%d in %.2fs",
+            len(uploads),
+            status_code,
+            time.monotonic() - t0,
+        )
 
         serializer = UploadResultSerializer(data=results, many=True)
         serializer.is_valid(raise_exception=True)

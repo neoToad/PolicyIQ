@@ -95,8 +95,6 @@ class AskPageView(View):
             )
 
         if result.kind == "no_information":
-            elapsed = time.monotonic() - t0
-            logger.info("Returned 'no relevant information' response in %.2fs", elapsed)
             return HttpResponse("<p>No relevant information found in the uploaded documents.</p>")
 
         def stream():
@@ -146,8 +144,6 @@ class QueryAPIView(APIView):
             )
 
         if result.kind == "no_information":
-            elapsed = time.monotonic() - t0
-            logger.info("Returned 'no relevant information' response in %.2fs", elapsed)
             return Response(
                 {"answer": "No relevant information found in the uploaded documents."},
                 status=status.HTTP_200_OK,
