@@ -95,3 +95,48 @@ Per Locked Decision #1 (drop `DocumentDeleteView`, staff-only deletes):
 - `pre-commit run --all-files` → all 10 hooks pass.
 - `python manage.py check` → 0 issues.
 - **Audit impact** (Phase 3 as a whole): closes L11 (upload-loop duplication, via 3.4), L13 (`safe_stream` mid-stream error handling, via 3.2), and the service-layer split is the precondition for M9/M10/M12 coverage work in Phase 4.
+
+### [Phase4.4] Reindex 500 on ingest failure (audit M9)
+- `StaffDocumentReindexView.post` now wraps `ingest_document(document)` in `try/except`. On any exception, it logs at ERROR level (with `exc_info=True` and the document id) and returns `HttpResponse("Reindex failed: ...", status=500)`. The pre-purge of PG chunks and ChromaDB vectors has already happened, so a failed reindex leaves the document in a clean (no-chunk) state rather than a partial one.
+- `test_reindex_returns_500_when_ingest_raises` — patches `ingest_document` to raise `ExtractionError`, asserts status 500 + an ERROR log line.
+- `test_reindex_purges_old_chunks_even_on_failure` — uses a real DB and a pre-seeded `Chunk` row; asserts the purge ran (chunk count == 0) and the view returned 5xx.
+- The pre-existing `test_pipeline_rolls_back_chunks_on_indexer_failure` was updated to assert the view now returns 5xx instead of letting the exception bubble.
+- Closes audit M9 (test coverage for the reindex failure path).
+
+### [Phase4.5] HistoryPageView tests (audit M10)
+- New `HistoryPageViewTests` class with 3 tests:
+  - `test_empty_db_renders_no_rows`: 200 + the empty-state copy.
+  - `test_two_docs_rendered_in_reverse_chronological_order`: newer doc appears first.
+  - `test_special_character_filename_does_not_inject_html`: `Aetna&2026.pdf` renders as `Aetna&amp;2026.pdf` — the XSS-safety regression guard.
+- Pre-Phase-4 the view had zero tests. Closes audit M10 (HistoryPageView coverage).
+
+### [Phase4.6] Mid-stream connection drop coverage (audit M10)
+- New `MidStreamConnectionDropTests` class with 2 tests:
+  - `test_generate_response_raises_generation_error_when_ollama_drops_mid_stream`: patches `ollama.generate` to yield 2 tokens then raise `OllamaError` (simulating `ChunkedEncodingError`); asserts `generate_response` propagates `GenerationError`.
+  - `test_safe_stream_converts_mid_stream_disconnect_to_sentinel`: end-to-end with `safe_stream` — yields the delivered tokens followed by an `<!-- error: ... -->` sentinel.
+- 11 generator tests pass.
+
+### [Phase4.7] Drop stale pragma comments in health.py (audit M12)
+- Dropped `# pragma: no cover - exercised via tests` from the two `except` branches in `check_postgresql` and `check_chromadb`. The corresponding tests in `test_health.py` already cover the lines.
+
+### [Phase4.8] Upload partial-failure matrix (audit M11)
+- New `UploadPartialFailureTests` class with 5 tests driving the actual `DocumentUploadAPIView` request handler:
+  - `test_two_files_one_success_one_pipeline_failure_returns_201`: mixed success + pipeline-failure → 201 with results list of 2.
+  - `test_two_files_one_success_one_validation_failure_returns_201`: mixed success + validation → 201 with `reason="validation"` marker.
+  - `test_one_file_pipeline_failure_returns_500`: single-file failure → 500 with failure-shaped result dict (not generic error envelope).
+  - `test_one_file_validation_failure_returns_400`: non-PDF → 400.
+  - `test_upload_result_serializer_accepts_failure_shape`: the no-document-id failure dict must pass `serializer.is_valid()`.
+- Closes audit M11.
+
+### [Phase4.9] Other audit gaps (L1, L8, L13)
+- **L1** `MEDIA_ROOT` test isolation: new `policyiq/documents/tests/_isolation.py::IsolatedMediaRootMixin` provides a unique `tempfile.mkdtemp()` per test and tears it down in `setUp`/`tearDown`. 19 `@override_settings(MEDIA_ROOT=tempfile.gettempdir())` decorators removed across `test_views.py`, `test_pipeline.py`, and `test_uploads_helper.py`. The four upload-related test classes (`DocumentUploadAPITests`, `DocumentUploadLoggingTests`, `UploadPartialFailureTests`, `IngestUploadedPdfTests`) now inherit the mixin.
+- **L8** `MAX_QUESTION_LOG_CHARS` cross-module: new `policyiq/queries/constants.py` is the single source of truth for `MAX_QUESTION_LOG_CHARS=80` and `MAX_CHUNKS_IN_LOG=10`. `retriever.py` and `views.py` import from there.
+- **L13** `test_views.py` consolidation: per Locked Decision #4, the project is committing fully to pytest-style for view tests. `policyiq/queries/tests/test_views.py` is removed; `test_views_pytest.py` is the home for query-view tests; the `conftest.py` fixtures stay. 16 TestCase tests dropped (the pytest file is a subset, so this is an intentional coverage change for the locked decision).
+
+### [Phase4.Verify] Verify Phase 4
+- `pytest policyiq/` → **246 passed** (262 baseline + 23 new − 16 dropped = 269 → 246 net). The 16 dropped are the `test_views.py` removal per Locked Decision #4.
+- `ruff check policyiq/` → all checks passed.
+- `ruff format --check policyiq/` → 78 files already formatted.
+- `pre-commit run --all-files` → all 10 hooks pass.
+- `python manage.py check` → 0 issues.
+- **Audit impact** (Phase 4 as a whole): closes H7 (Ollama-down integration), H8 (empty/below-threshold), M7 (delete auth), M9 (reindex failure), M10 (HistoryPageView + mid-stream), M11 (partial-failure matrix), M12 (pragma cleanup), L1 (MEDIA_ROOT isolation), L8 (constants extraction), L13 (test consolidation).
