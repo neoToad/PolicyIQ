@@ -195,25 +195,43 @@ class EmbedderOllamaClientTests(SimpleTestCase):
 
 class IndexerTests(SimpleTestCase):
     def setUp(self):
-        # Ensure the singleton client cache is cleared between tests.
-        from documents.services.indexer import get_chroma_client
+        # No more cache_clear() needed: get_chroma_client now keys on
+        # the path argument (audit L5), so override_settings on
+        # CHROMA_PERSIST_DIR is honored automatically.
+        pass
 
-        get_chroma_client.cache_clear()
-
-    @mock.patch("documents.services.indexer.chromadb.PersistentClient")
+    @mock.patch("documents.services.indexer.get_chroma_client")
     @mock.patch("documents.services.indexer.settings")
-    def test_get_collection_uses_persist_dir_and_returns_named_collection(self, mock_settings, mock_persistent_client):
+    def test_get_collection_uses_persist_dir_and_returns_named_collection(self, mock_settings, mock_get_client):
         mock_settings.CHROMA_PERSIST_DIR = "/tmp/chroma"
         mock_collection = mock.Mock()
         mock_client = mock.Mock()
         mock_client.get_or_create_collection.return_value = mock_collection
-        mock_persistent_client.return_value = mock_client
+        mock_get_client.return_value = mock_client
 
         collection = get_collection("policies")
 
         self.assertIs(collection, mock_collection)
-        mock_persistent_client.assert_called_once_with(path="/tmp/chroma")
+        # get_chroma_client() is called with no args; the default path
+        # is read from settings via _get_persist_dir() inside the body.
+        mock_get_client.assert_called_once_with()
         mock_client.get_or_create_collection.assert_called_once_with(name="policies")
+
+    def test_get_chroma_client_caches_per_path(self):
+        """Audit L5: lru_cache keys on the path argument so
+        ``override_settings(CHROMA_PERSIST_DIR=...)`` produces a new
+        client rather than reusing the previous singleton."""
+        from documents.services.indexer import get_chroma_client
+
+        # Two calls with the same path return the same instance.
+        client_a = get_chroma_client("/tmp/chroma-a")
+        client_b = get_chroma_client("/tmp/chroma-a")
+        self.assertIs(client_a, client_b)
+        # A different path produces a different instance.
+        client_c = get_chroma_client("/tmp/chroma-c")
+        self.assertIsNot(client_a, client_c)
+        # Cleanup so the cache doesn't leak between tests.
+        get_chroma_client.cache_clear()
 
     @mock.patch("documents.services.indexer.get_collection")
     def test_index_document_adds_all_chunks_with_expected_ids_metadata(self, mock_get_collection):
@@ -292,10 +310,9 @@ class ChunkerLoggingTests(SimpleTestCase):
 
 class IndexerLoggingTests(SimpleTestCase):
     def setUp(self):
-        # Ensure the singleton client cache is cleared between tests.
-        from documents.services.indexer import get_chroma_client
-
-        get_chroma_client.cache_clear()
+        # No more cache_clear() needed: get_chroma_client now keys on
+        # the path argument (audit L5).
+        pass
 
     @mock.patch("documents.services.indexer.get_collection")
     def test_indexer_logs_vectors_indexed_with_timing(self, mock_get_collection):

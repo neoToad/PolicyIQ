@@ -16,10 +16,18 @@ def _get_persist_dir() -> str:
     return persist_dir
 
 
-@functools.lru_cache(maxsize=1)
-def get_chroma_client() -> chromadb.PersistentClient:
-    """Return a lazily-created singleton PersistentClient instance."""
-    return chromadb.PersistentClient(path=_get_persist_dir())
+@functools.lru_cache(maxsize=4)
+def get_chroma_client(path: str | None = None) -> chromadb.PersistentClient:
+    """Return a lazily-created singleton PersistentClient instance.
+
+    The path is part of the cache key (audit L5) so an
+    ``override_settings(CHROMA_PERSIST_DIR=...)`` test sees a new
+    client rather than the singleton from a previous call. Callers
+    that don't pass ``path`` get the default
+    ``settings.CHROMA_PERSIST_DIR`` (or ``<BASE_DIR>/chroma`` if
+    unset).
+    """
+    return chromadb.PersistentClient(path=path or _get_persist_dir())
 
 
 def get_collection(collection_name: str = "policyiq") -> chromadb.Collection:
