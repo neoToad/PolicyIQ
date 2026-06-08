@@ -4,18 +4,9 @@ import time
 from django.conf import settings
 from documents.services.embedder import embed_query
 from documents.services.indexer import get_collection
+from queries.constants import MAX_CHUNKS_IN_LOG, MAX_QUESTION_LOG_CHARS
 
 logger = logging.getLogger("queries.retriever")
-
-# Don't dump full questions into INFO logs — they may contain PHI. Truncate
-# at this many characters with a "..." suffix in the "Retrieving up to N
-# chunks" receipt line.
-MAX_QUESTION_LOG_CHARS = 80
-
-# Cap the "Chunks: [...]" log line at this many entries to keep log volume
-# bounded when top_k is large. The summary line above still reports the
-# total count; the cap only affects the per-chunk detail list.
-MAX_CHUNKS_IN_LOG = 10
 
 
 def _truncate_for_log(text: str, max_chars: int = MAX_QUESTION_LOG_CHARS) -> str:

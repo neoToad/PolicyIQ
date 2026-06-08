@@ -16,10 +16,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from queries.constants import MAX_QUESTION_LOG_CHARS
 from queries.serializers import CitationSerializer, QueryRequestSerializer
 from queries.services import health
 from queries.services.query_pipeline import run_query
-from queries.services.retriever import MAX_QUESTION_LOG_CHARS
 from queries.throttles import QueryAnonRateThrottle, QueryUserRateThrottle
 from queries.exceptions import GenerationError
 

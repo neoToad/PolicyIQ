@@ -10,9 +10,9 @@ from unittest import mock
 
 from django.test import SimpleTestCase
 
+from queries.constants import MAX_QUESTION_LOG_CHARS
 from queries.services.retriever import (
     MAX_CHUNKS_IN_LOG,
-    MAX_QUESTION_LOG_CHARS,
     retrieve_chunks,
 )
 
