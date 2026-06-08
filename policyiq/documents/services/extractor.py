@@ -21,7 +21,7 @@ def extract_pages(pdf_path: str) -> list[dict]:
         FileNotFoundError: If the file does not exist.
         ValueError: If the file is not a valid PDF.
     """
-    t0 = time.monotonic()
+    t0 = time.monotonic()  # TODO: shared stage timer
     try:
         with fitz.open(pdf_path) as doc:
             pages = [

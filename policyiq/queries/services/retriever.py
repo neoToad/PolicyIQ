@@ -45,12 +45,12 @@ def retrieve_chunks(query: str, document_id: str | None = None, top_k: int | Non
         document_id or "<all>",
     )
 
-    t0 = time.monotonic()
+    t0 = time.monotonic()  # TODO: shared stage timer
     query_embedding = embed_query(query)
     embed_s = time.monotonic() - t0
     logger.info("Embedded query (%d chars) in %.2fs", len(query), embed_s)
 
-    t0 = time.monotonic()
+    t0 = time.monotonic()  # TODO: shared stage timer
     collection = get_collection()
     where_filter = {"document_id": document_id} if document_id else None
     results = collection.query(

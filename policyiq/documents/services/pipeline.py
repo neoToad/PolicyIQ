@@ -81,7 +81,7 @@ def ingest_uploaded_pdf(upload: UploadedFile, *, username: str | None = None) ->
         chunk_count=0,
     )
 
-    t0 = time.monotonic()
+    t0 = time.monotonic()  # TODO: shared stage timer
     try:
         ingest_document(document, file_path=full_path)
     except Exception as exc:
@@ -145,18 +145,18 @@ def ingest_document(document, file_path: str | None = None) -> dict:
 
     try:
         with transaction.atomic():
-            t0 = time.monotonic()
+            t0 = time.monotonic()  # TODO: shared stage timer
             pages = extract_pages(path)
             extract_s = time.monotonic() - t0
             logger.info("Extracted %d pages from %s in %.2fs", len(pages), document.name, extract_s)
 
-            t0 = time.monotonic()
+            t0 = time.monotonic()  # TODO: shared stage timer
             cleaned_pages = clean_pages(pages)
             chunks = chunk_pages(cleaned_pages)
             chunk_s = time.monotonic() - t0
             logger.info("Created %d chunks for %s in %.2fs", len(chunks), document.name, chunk_s)
 
-            t0 = time.monotonic()
+            t0 = time.monotonic()  # TODO: shared stage timer
             embedded_chunks = embed_chunks(chunks)
             embed_s = time.monotonic() - t0
             logger.info("Embedded %d chunks for %s in %.2fs", len(embedded_chunks), document.name, embed_s)
@@ -170,7 +170,7 @@ def ingest_document(document, file_path: str | None = None) -> dict:
             # here, the transaction rolls back document.save() and no
             # Chunk rows have been written yet, so no PG compensation
             # is needed.
-            t0 = time.monotonic()
+            t0 = time.monotonic()  # TODO: shared stage timer
             index_document(str(document.id), embedded_chunks, document_name=document.name)
             index_s = time.monotonic() - t0
 

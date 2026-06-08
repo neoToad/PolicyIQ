@@ -31,7 +31,7 @@ def chunk_pages(pages: list[dict], chunk_size: int | None = None, overlap: int |
     if overlap >= chunk_size:
         raise ValueError("overlap must be smaller than chunk_size")
 
-    t0 = time.monotonic()
+    t0 = time.monotonic()  # TODO: shared stage timer
     encoding = tiktoken.get_encoding("cl100k_base")
     all_tokens = []
     token_page_numbers: list[int] = []

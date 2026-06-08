@@ -38,7 +38,7 @@ def index_document(document_id: str, chunks: list[dict], document_name: str = ""
     Returns:
         The number of chunks indexed.
     """
-    t0 = time.monotonic()
+    t0 = time.monotonic()  # TODO: shared stage timer
     try:
         collection = get_collection()
         ids = [f"{document_id}:{chunk['token_offset']}" for chunk in chunks]
